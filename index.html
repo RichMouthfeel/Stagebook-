@@ -1,0 +1,2131 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-title" content="Stagebook">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<meta name="theme-color" content="#0f1115">
+<link rel="manifest" href="manifest.webmanifest">
+<link rel="apple-touch-icon" href="apple-touch-icon.png">
+<link rel="icon" href="icon-192.png">
+<title>Stagebook</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Atkinson+Hyperlegible:wght@400;700&family=Big+Shoulders+Display:wght@700;800&family=JetBrains+Mono:wght@400;700&display=swap">
+<style>:root{padding-top:env(safe-area-inset-top,0px);padding-bottom:env(safe-area-inset-bottom,0px);color-scheme:light}body{margin:0}img{max-width:100%}[hidden]{display:none!important}</style>
+</head>
+<body>
+<style>
+/* Layout: one-screen app shell. Slim top bar, then a single working surface (list, chart, or stage view). */
+:root {
+  --bg: #eef0f3;
+  --surface: #ffffff;
+  --surface-2: #e3e6eb;
+  --fg: #15171c;
+  --muted: #5b6270;
+  --line: #d3d7de;
+  --accent: #c2410c;
+  --accent-fg: #ffffff;
+  --chord: #b43c0b;
+  --ok: #15803d;
+  --warn: #a16207;
+  --bad: #b91c1c;
+  --sticky-bg: #fde68a;
+  --sticky-fg: #3a2e00;
+  --shadow: 0 1px 2px rgb(15 17 21 / 0.08), 0 6px 18px rgb(15 17 21 / 0.08);
+  --font-display: "Big Shoulders Display", "Arial Narrow", "Helvetica Neue", sans-serif;
+  --font-body: "Atkinson Hyperlegible", system-ui, -apple-system, "Segoe UI", sans-serif;
+  --font-mono: "JetBrains Mono", ui-monospace, Menlo, Consolas, monospace;
+  --radius: 10px;
+  --gutter-l: max(16px, env(safe-area-inset-left, 0px));
+  --gutter-r: max(16px, env(safe-area-inset-right, 0px));
+}
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) {
+    --bg: #0f1115; --surface: #181b21; --surface-2: #232730; --fg: #eceef2; --muted: #9aa1ad;
+    --line: #2d323c; --accent: #fb8a3c; --accent-fg: #1b0d02; --chord: #ffa25a;
+    --ok: #4ade80; --warn: #fbbf24; --bad: #f87171; --sticky-bg: #4b3d0d; --sticky-fg: #fff4c7;
+    --shadow: 0 1px 2px rgb(0 0 0 / 0.4), 0 8px 24px rgb(0 0 0 / 0.35);
+    color-scheme: dark;
+  }
+}
+:root[data-theme="dark"] {
+  --bg: #0f1115; --surface: #181b21; --surface-2: #232730; --fg: #eceef2; --muted: #9aa1ad;
+  --line: #2d323c; --accent: #fb8a3c; --accent-fg: #1b0d02; --chord: #ffa25a;
+  --ok: #4ade80; --warn: #fbbf24; --bad: #f87171; --sticky-bg: #4b3d0d; --sticky-fg: #fff4c7;
+  --shadow: 0 1px 2px rgb(0 0 0 / 0.4), 0 8px 24px rgb(0 0 0 / 0.35);
+  color-scheme: dark;
+}
+html, body { height: 100%; }
+body { background: var(--bg); color: var(--fg); font-family: var(--font-body); font-size: 16px; line-height: 1.45; overflow: hidden; -webkit-text-size-adjust: 100%; }
+* { box-sizing: border-box; }
+button, input, select, textarea { font: inherit; color: inherit; }
+a { color: var(--accent); }
+:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+
+#app { height: 100%; display: flex; flex-direction: column; }
+.topbar { display: flex; align-items: center; gap: 12px; padding-block: 8px; padding-left: var(--gutter-l); padding-right: var(--gutter-r); background: var(--surface); border-bottom: 1px solid var(--line); flex-wrap: wrap; }
+.brand { font-family: var(--font-display); font-weight: 800; font-size: 26px; letter-spacing: 0.02em; text-transform: uppercase; line-height: 1; margin-right: 4px; }
+.brand span { color: var(--accent); }
+.nav { display: flex; gap: 4px; }
+.nav button { border: 0; background: transparent; padding: 8px 12px; border-radius: 8px; font-weight: 700; color: var(--muted); cursor: pointer; }
+.nav button[aria-current="page"] { background: var(--surface-2); color: var(--fg); }
+.status { margin-left: auto; display: inline-flex; align-items: center; gap: 8px; font-size: 13px; color: var(--muted); border: 1px solid var(--line); border-radius: 999px; padding: 4px 10px; background: var(--bg); cursor: pointer; }
+.status i { width: 8px; height: 8px; border-radius: 50%; background: var(--muted); display: inline-block; }
+.status.ok i { background: var(--ok); }
+.status.warn i { background: var(--warn); }
+.status.bad i { background: var(--bad); }
+
+.main { flex: 1; min-height: 0; overflow: auto; padding-block: 20px 40px; padding-left: var(--gutter-l); padding-right: var(--gutter-r); }
+.main.fill { overflow: hidden; display: flex; flex-direction: column; padding-block: 0; padding-left: 0; padding-right: 0; }
+.wrap { max-width: 980px; margin: 0 auto; display: flex; flex-direction: column; gap: 16px; }
+
+h1, h2 { font-family: var(--font-display); font-weight: 800; letter-spacing: 0.01em; line-height: 1.02; margin: 0; text-wrap: balance; }
+h1 { font-size: 40px; }
+h2 { font-size: 26px; }
+.pagehead { display: flex; align-items: end; justify-content: space-between; gap: 12px; flex-wrap: wrap; }
+.actions { display: flex; gap: 8px; flex-wrap: wrap; align-items: center; }
+.muted { color: var(--muted); }
+.small { font-size: 13px; }
+.eyebrow { font-size: 12px; font-weight: 700; letter-spacing: 0.1em; text-transform: uppercase; color: var(--muted); }
+
+.btn { display: inline-flex; align-items: center; justify-content: center; gap: 6px; min-height: 40px; padding: 8px 14px; border-radius: 9px; border: 1px solid var(--line); background: var(--surface); font-weight: 700; cursor: pointer; text-decoration: none; color: var(--fg); white-space: nowrap; touch-action: manipulation; user-select: none; -webkit-user-select: none; }
+.btn:hover { border-color: var(--muted); }
+.btn.primary { background: var(--accent); border-color: var(--accent); color: var(--accent-fg); }
+.btn.danger { color: var(--bad); }
+.btn.ghost { background: transparent; border-color: transparent; }
+.btn.sm { min-height: 34px; padding: 4px 10px; font-size: 14px; }
+.btn[aria-pressed="true"] { background: var(--fg); color: var(--bg); border-color: var(--fg); }
+.btn:disabled { opacity: 0.45; cursor: default; }
+.seg { display: inline-flex; border: 1px solid var(--line); border-radius: 9px; overflow: hidden; background: var(--surface); }
+.seg .btn { border: 0; border-radius: 0; min-height: 38px; }
+.seg .btn + .btn { border-left: 1px solid var(--line); }
+.seg .val { display: inline-flex; align-items: center; padding: 0 10px; font-weight: 700; font-variant-numeric: tabular-nums; border-left: 1px solid var(--line); border-right: 1px solid var(--line); min-width: 52px; justify-content: center; font-size: 14px; }
+
+input[type="text"], input[type="search"], input[type="url"], input[type="number"], input[type="date"], select, textarea { background: var(--surface); border: 1px solid var(--line); border-radius: 9px; padding: 9px 11px; min-height: 42px; width: 100%; }
+textarea { resize: vertical; }
+label.field { display: flex; flex-direction: column; gap: 4px; font-size: 13px; font-weight: 700; color: var(--muted); min-width: 0; }
+label.field > input, label.field > select, label.field > textarea { color: var(--fg); font-weight: 400; font-size: 16px; }
+.grid { display: grid; gap: 12px; grid-template-columns: repeat(auto-fit, minmax(160px, 1fr)); }
+.grid input, .grid select { min-width: 0; max-width: 100%; }
+input[type="date"] { -webkit-appearance: none; appearance: none; display: block; min-width: 0; max-width: 100%; }
+.setfields { grid-template-columns: minmax(0, 2fr) minmax(0, 150px) minmax(0, 1.5fr); }
+@media (max-width: 600px) { .setfields { grid-template-columns: minmax(0, 1fr) minmax(0, 150px); } .setfields > label:first-child { grid-column: 1 / -1; } }
+
+.chips { display: flex; gap: 6px; flex-wrap: wrap; }
+.chip { border: 1px solid var(--line); background: var(--surface); border-radius: 999px; padding: 4px 12px; font-size: 14px; cursor: pointer; font-weight: 700; color: var(--muted); }
+.chip[aria-pressed="true"] { background: var(--fg); color: var(--bg); border-color: var(--fg); }
+.tag { font-size: 12px; font-weight: 700; color: var(--muted); background: var(--surface-2); border-radius: 6px; padding: 1px 7px; }
+.keybadge { font-family: var(--font-mono); font-weight: 700; font-size: 13px; color: var(--chord); border: 1.5px solid currentColor; border-radius: 6px; padding: 0 6px; line-height: 1.5; white-space: nowrap; }
+
+.list { list-style: none; margin: 0; padding: 0; background: var(--surface); border: 1px solid var(--line); border-radius: var(--radius); overflow: hidden; }
+.list > li + li { border-top: 1px solid var(--line); }
+.row { display: flex; align-items: center; gap: 12px; padding: 12px 14px; width: 100%; text-align: left; background: transparent; border: 0; cursor: pointer; min-height: 60px; }
+.row:hover { background: var(--surface-2); }
+.row .main-col { flex: 1; min-width: 0; display: flex; flex-direction: column; gap: 2px; }
+.row .title { font-weight: 700; font-size: 17px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.row .sub { color: var(--muted); font-size: 14px; display: flex; gap: 8px; flex-wrap: wrap; align-items: center; }
+.empty { text-align: center; padding: 40px 16px; color: var(--muted); background: var(--surface); border: 1px dashed var(--line); border-radius: var(--radius); display: flex; flex-direction: column; gap: 12px; align-items: center; }
+.empty strong { color: var(--fg); font-size: 18px; }
+
+/* Song view */
+.songhead { display: flex; flex-direction: column; gap: 10px; padding-block: 12px; padding-left: var(--gutter-l); padding-right: var(--gutter-r); background: var(--surface); border-bottom: 1px solid var(--line); }
+.songhead .titleline { display: flex; align-items: baseline; gap: 12px; flex-wrap: wrap; }
+.songhead h1 { font-size: 34px; }
+.songhead .artist { color: var(--muted); font-size: 17px; }
+.toolbar { display: flex; gap: 8px; flex-wrap: wrap; align-items: center; }
+.toolbar .sp { flex: 1; }
+.warnbar { display: flex; flex-direction: column; gap: 10px; padding: 12px 14px; border-radius: var(--radius); border: 1.5px solid var(--bad); background: var(--bg); }
+.notebar { background: var(--sticky-bg); color: var(--sticky-fg); padding-block: 8px; padding-left: var(--gutter-l); padding-right: var(--gutter-r); font-size: 15px; white-space: pre-wrap; border-bottom: 1px solid var(--line); }
+.sheetwrap { flex: 1; min-height: 0; position: relative; background: var(--bg); }
+.sheet-scroll { position: absolute; inset: 0; overflow: auto; -webkit-overflow-scrolling: touch; overscroll-behavior: contain; }
+.sheet { position: relative; display: inline-block; min-width: 100%; padding: 18px var(--gutter-r) 40vh var(--gutter-l); }
+.sheet.drawing { touch-action: none; }
+.sheet canvas.ink { position: absolute; left: 0; top: 0; pointer-events: none; }
+.chart { font-family: var(--font-mono); line-height: 1.4; font-size: 18px; position: relative; }
+.chart .ln { white-space: pre; min-height: 1.4em; }
+.chart .ch { color: var(--chord); font-weight: 700; }
+.chart .fill { color: var(--muted); }
+.chart .sec { font-family: var(--font-body); font-weight: 700; text-transform: uppercase; letter-spacing: 0.08em; font-size: 0.78em; color: var(--muted); margin-top: 0.7em; border-bottom: 1px solid var(--line); display: inline-block; min-height: 0; }
+.chart .sec + .ln { margin-top: 0.25em; }
+.chart .cmt { font-family: var(--font-body); font-style: italic; color: var(--muted); }
+.chart .tab { color: var(--fg); opacity: 0.85; }
+.chart a { color: var(--accent); }
+.pdfpages { display: flex; flex-direction: column; gap: 12px; width: 100%; }
+.pdfpages canvas { width: 100%; height: auto; display: block; background: #fff; border-radius: 4px; box-shadow: var(--shadow); }
+.sheet.pdfmode { display: block; max-width: 1000px; margin: 0 auto; }
+.sticky { position: absolute; width: 15em; max-width: 70vw; background: var(--sticky-bg); color: var(--sticky-fg); border-radius: 8px; box-shadow: var(--shadow); display: flex; flex-direction: column; font-family: var(--font-body); font-size: 15px; z-index: 2; }
+.sticky .grip { display: flex; align-items: center; justify-content: space-between; padding: 2px 4px 0 10px; cursor: grab; touch-action: none; font-size: 11px; font-weight: 700; letter-spacing: 0.08em; text-transform: uppercase; opacity: 0.8; user-select: none; -webkit-user-select: none; }
+.sticky .grip button { border: 0; background: transparent; color: inherit; font-size: 18px; padding: 2px 8px; cursor: pointer; }
+.sticky textarea { background: transparent; border: 0; color: inherit; min-height: 60px; resize: none; padding: 4px 10px 10px; font-size: 15px; }
+.pdfnote { padding: 24px; color: var(--muted); }
+
+.tray { position: absolute; right: calc(12px + env(safe-area-inset-right, 0px)); bottom: calc(12px + env(safe-area-inset-bottom, 0px)); display: flex; gap: 6px; align-items: center; flex-wrap: wrap; justify-content: flex-end; background: var(--surface); border: 1px solid var(--line); border-radius: 14px; padding: 6px; box-shadow: var(--shadow); z-index: 5; max-width: calc(100% - 24px); }
+.swatch { width: 30px; height: 30px; border-radius: 50%; border: 2px solid var(--surface); box-shadow: 0 0 0 1px var(--line); cursor: pointer; }
+.swatch[aria-pressed="true"] { box-shadow: 0 0 0 2px var(--fg); }
+
+/* Editor */
+.editor { display: flex; flex-direction: column; gap: 14px; }
+.palette { position: sticky; top: -20px; z-index: 3; background: var(--surface); border: 1px solid var(--line); border-radius: var(--radius); padding: 8px; display: flex; flex-direction: column; gap: 6px; box-shadow: var(--shadow); }
+.prow { display: flex; gap: 5px; overflow-x: auto; align-items: center; scrollbar-width: thin; padding-bottom: 2px; }
+.prow .lbl { font-size: 11px; font-weight: 700; letter-spacing: 0.08em; text-transform: uppercase; color: var(--muted); white-space: nowrap; padding-right: 4px; min-width: 64px; }
+.pk { min-width: 44px; min-height: 40px; border-radius: 8px; border: 1px solid var(--line); background: var(--bg); font-family: var(--font-mono); font-weight: 700; cursor: pointer; padding: 0 9px; white-space: nowrap; touch-action: manipulation; user-select: none; -webkit-user-select: none; }
+.pk.c { color: var(--chord); }
+.pk.s { font-family: var(--font-body); font-size: 14px; }
+textarea.chartedit { font-family: var(--font-mono); font-size: 16px; line-height: 1.45; min-height: 50vh; white-space: pre; overflow-wrap: normal; overflow-x: auto; }
+.pdfbox { display: flex; gap: 10px; align-items: center; flex-wrap: wrap; padding: 10px 12px; border: 1px solid var(--line); border-radius: var(--radius); background: var(--surface); }
+.savedline { font-size: 13px; color: var(--muted); }
+
+.tabsheet { position: fixed; inset: 0; z-index: 40; background: rgb(0 0 0 / 0.45); display: flex; align-items: flex-end; justify-content: center; padding-top: env(safe-area-inset-top, 0px); }
+.tabpanel { background: var(--surface); width: min(1000px, 100%); max-height: 100%; overflow: auto; border-radius: 16px 16px 0 0; padding-block: 16px calc(16px + env(safe-area-inset-bottom, 0px)); padding-left: var(--gutter-l); padding-right: var(--gutter-r); display: flex; flex-direction: column; gap: 12px; box-shadow: var(--shadow); }
+.tabgrid { display: grid; justify-content: start; overflow-x: auto; padding-block: 6px; border: 1px solid var(--line); border-radius: var(--radius); background: var(--surface); }
+.tabgrid .lab { position: sticky; left: 0; z-index: 1; background: var(--surface); font-family: var(--font-mono); font-weight: 700; padding: 0 8px 0 10px; display: flex; align-items: center; justify-content: flex-end; color: var(--muted); }
+.tcell { min-width: 40px; height: 42px; border: 0; padding: 0 3px; cursor: pointer; font-family: var(--font-mono); font-weight: 700; font-size: 17px; color: var(--chord); background: linear-gradient(var(--muted), var(--muted)) center / 100% 1.5px no-repeat; touch-action: manipulation; }
+.tcell span { background: var(--surface); padding: 0 3px; border-radius: 4px; }
+.tcell.selcol { background-color: var(--surface-2); }
+.tcell.selcol span { background: var(--surface-2); }
+.tcell.sel { box-shadow: inset 0 0 0 2.5px var(--accent); border-radius: 8px; }
+.tcell.bar { min-width: 16px; background: linear-gradient(var(--fg), var(--fg)) center / 2px 100% no-repeat; }
+.tpad { display: flex; flex-wrap: wrap; gap: 6px; }
+.tabpreview { margin: 0; font-family: var(--font-mono); font-size: 14px; line-height: 1.35; background: var(--bg); border-radius: 8px; padding: 10px 12px; overflow-x: auto; white-space: pre; }
+/* Sets */
+.setitems .row { cursor: default; }
+.openbtn { flex: 1; min-width: 0; display: flex; align-items: center; gap: 12px; background: transparent; border: 0; padding: 4px 0; margin: -4px 0; text-align: left; cursor: pointer; border-radius: 8px; }
+.openbtn:hover .title { color: var(--accent); }
+.num { font-family: var(--font-mono); font-weight: 700; color: var(--muted); width: 2.2em; text-align: right; font-variant-numeric: tabular-nums; }
+.breakrow { background: var(--surface-2); }
+.breakrow .title { font-family: var(--font-display); text-transform: uppercase; letter-spacing: 0.06em; }
+.picker { display: flex; flex-direction: column; gap: 8px; }
+.picker .list { max-height: 320px; overflow: auto; }
+.card { background: var(--surface); border: 1px solid var(--line); border-radius: var(--radius); padding: 16px; display: flex; flex-direction: column; gap: 10px; }
+
+/* Perform */
+.perform { position: fixed; inset: 0; background: var(--bg); display: flex; flex-direction: column; z-index: 20; padding-top: env(safe-area-inset-top, 0px); padding-bottom: env(safe-area-inset-bottom, 0px); }
+.perf-top, .perf-bottom { display: flex; align-items: center; gap: 8px; padding-block: 6px; padding-left: var(--gutter-l); padding-right: var(--gutter-r); background: var(--surface); flex-wrap: wrap; }
+.perf-top { border-bottom: 1px solid var(--line); }
+.perf-bottom { border-top: 1px solid var(--line); }
+.perf-title { flex: 1; min-width: 0; display: flex; align-items: baseline; gap: 10px; }
+.perf-title strong { font-family: var(--font-display); font-size: 26px; font-weight: 800; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; line-height: 1.1; }
+.perf-count { font-family: var(--font-mono); font-weight: 700; color: var(--muted); font-size: 14px; white-space: nowrap; }
+.perf-next { flex: 1; min-width: 0; text-align: center; color: var(--muted); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.perf-next strong { color: var(--fg); }
+.perf-bottom .btn { min-width: 96px; min-height: 48px; font-size: 17px; }
+.breakpage { position: absolute; inset: 0; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 8px; }
+.breakpage div { font-family: var(--font-display); font-weight: 800; font-size: 72px; text-transform: uppercase; letter-spacing: 0.04em; }
+.perf-list { position: absolute; top: 0; right: 0; bottom: 0; width: min(380px, 92vw); background: var(--surface); border-left: 1px solid var(--line); box-shadow: var(--shadow); overflow: auto; z-index: 6; }
+.perf-list .row[aria-current="true"] { background: var(--surface-2); }
+
+.toast { position: fixed; left: 50%; bottom: calc(18px + env(safe-area-inset-bottom, 0px)); transform: translateX(-50%); background: var(--fg); color: var(--bg); padding: 10px 14px; border-radius: 10px; display: flex; gap: 12px; align-items: center; z-index: 50; box-shadow: var(--shadow); max-width: calc(100% - 32px); font-size: 15px; }
+.toast button { background: transparent; color: inherit; border: 1px solid currentColor; border-radius: 7px; padding: 3px 10px; font-weight: 700; cursor: pointer; }
+.menu { position: absolute; background: var(--surface); border: 1px solid var(--line); border-radius: var(--radius); box-shadow: var(--shadow); padding: 6px; z-index: 30; min-width: 220px; max-height: 60vh; overflow: auto; display: flex; flex-direction: column; }
+.menu button { text-align: left; border: 0; background: transparent; padding: 10px 12px; border-radius: 7px; cursor: pointer; font-weight: 700; }
+.menu button:hover { background: var(--surface-2); }
+.statgrid { display: grid; grid-template-columns: repeat(auto-fit, minmax(120px, 1fr)); gap: 10px; }
+.stat { background: var(--bg); border-radius: 8px; padding: 10px 12px; }
+.stat b { display: block; font-family: var(--font-display); font-size: 32px; line-height: 1; font-variant-numeric: tabular-nums; }
+@media (max-width: 600px) {
+  h1 { font-size: 32px; }
+  .songhead h1 { font-size: 26px; }
+  .perf-title strong { font-size: 20px; }
+  .perf-bottom .btn { min-width: 70px; }
+}
+@media (prefers-reduced-motion: reduce) { * { scroll-behavior: auto !important; } }
+</style>
+
+<div id="app"></div>
+
+<script>
+"use strict";
+/* The same file runs two ways: inside the Claude app (cloud sync through window.claude) and as the
+   stand-alone home-screen app, which keeps everything on the iPad and works with no internet. */
+const IN_CLAUDE = !!(window.claude && window.claude.use);
+/* ---------- tiny helpers ---------- */
+const $ = (s, r = document) => r.querySelector(s);
+const $$ = (s, r = document) => [...r.querySelectorAll(s)];
+const esc = s => String(s ?? "").replace(/[&<>"']/g, c => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c]));
+const uid = () => Date.now().toString(36) + Math.random().toString(36).slice(2, 8);
+const clamp = (v, a, b) => Math.max(a, Math.min(b, v));
+const debounceMap = new Map();
+function debounce(key, ms, fn) { clearTimeout(debounceMap.get(key)); debounceMap.set(key, setTimeout(() => { debounceMap.delete(key); fn(); }, ms)); }
+function loadPrefs() { try { return JSON.parse(localStorage.getItem("stagebook.prefs") || "{}"); } catch { return {}; } }
+function savePrefs() { try { localStorage.setItem("stagebook.prefs", JSON.stringify(state.prefs)); } catch {} }
+
+/* ---------- music theory ---------- */
+const SH = ["C", "C#", "D", "D#", "E", "F", "F#", "G", "G#", "A", "A#", "B"];
+const FL = ["C", "Db", "D", "Eb", "E", "F", "Gb", "G", "Ab", "A", "Bb", "B"];
+const CHORD_RE = /^(?:N\.?C\.?|[A-G](?:#|b|♯|♭)?(?:maj|Maj|min|m|M|dim|aug|sus|add|\+|°|ø|-)?\d{0,2}(?:(?:maj|sus|add|dim|aug|no|b|#|\+|-)\d{1,2})*(?:\([^)\s]*\))?(?:\/[A-G](?:#|b|♯|♭)?)?)$/;
+const FILLER_RE = /^(?:\|+|:?\|\|?:?|\/+|-+|%|\*+|x\d+|\(?x?\d+x?\)?|\.+|\(|\)|>|<)$/i;
+const isChordTok = t => CHORD_RE.test(t);
+function pc(n) { const m = { C: 0, D: 2, E: 4, F: 5, G: 7, A: 9, B: 11 }; let v = m[n[0]]; for (const ch of n.slice(1)) { if (ch === "#" || ch === "♯") v++; if (ch === "b" || ch === "♭") v--; } return (v + 120) % 12; }
+const noteName = (p, flats) => (flats ? FL : SH)[((p % 12) + 12) % 12];
+function trChord(ch, semi, flats) {
+  if (!semi || /^N/.test(ch)) return ch;
+  return ch.replace(/^([A-G](?:#|b|♯|♭)?)/, r => noteName(pc(r) + semi, flats)).replace(/\/([A-G](?:#|b|♯|♭)?)$/, (m, r) => "/" + noteName(pc(r) + semi, flats));
+}
+function parseChord(c) {
+  const m = c.match(/^([A-G](?:#|b|♯|♭)?)(.*)$/); if (!m) return null;
+  const q = m[2].split("/")[0];
+  return { root: pc(m[1]), minor: /^(m(?!aj)|min|-)/.test(q), dim: /^(dim|°|ø)/.test(q) || /^m7b5/.test(q) };
+}
+const FLAT_MAJ = [5, 10, 3, 8, 1];
+const FLAT_MIN = [2, 7, 0, 5, 10, 3];
+function keyName(t, minor) { const f = minor ? FLAT_MIN.includes(t) : FLAT_MAJ.includes(t); return noteName(t, f) + (minor ? "m" : ""); }
+function keyUsesFlats(k) { const p = k && parseChord(k); if (!p) return false; return p.minor ? FLAT_MIN.includes(p.root) : FLAT_MAJ.includes(p.root); }
+function transposeKey(k, semi) { const p = k && parseChord(k); if (!p) return k; return keyName((p.root + semi + 120) % 12, p.minor); }
+const ALL_KEYS = [...Array(12).keys()].flatMap(t => [keyName(t, false), keyName(t, true)]);
+
+/* ---------- chart parsing ---------- */
+const SEC_WORDS = "intro|verse|pre-?chorus|chorus|post-?chorus|bridge|outro|solo|interlude|instrumental|tag|coda|breakdown|refrain|hook|ending|riff|turnaround|break|vamp|middle 8|end";
+const SEC_RE = new RegExp("^[\\[({]?\\s*(?:" + SEC_WORDS + ")\\b[^\\])}]{0,24}[\\])}]?\\s*:?$", "i");
+function isTabLine(l) { const t = l.trim(); if (/^[A-Ga-g][#b]?\s*[|:][-\d|hpbrsxv\/\\~().^*= ]{5,}$/.test(t)) return true; return t.includes("|") && (t.match(/-/g) || []).length >= 8 && /^[-\d|hpbrx\/\\~ ]+$/.test(t); }
+function isSectionLine(l) {
+  const t = l.trim(); if (!t || t.length > 40) return false;
+  const br = t.match(/^\[([^\]]+)\]$/); if (br) return !isChordTok(br[1].trim());
+  if (SEC_RE.test(t)) return true;
+  return /^[A-Za-z][A-Za-z0-9 \-']{0,26}:$/.test(t) && !isChordLine(t.slice(0, -1));
+}
+const cleanSection = l => l.trim().replace(/^[\[({]\s*|\s*[\])}]$/g, "").replace(/:$/, "");
+function isChordLine(line) {
+  const toks = line.trim().split(/\s+/).filter(Boolean); if (!toks.length) return false;
+  let n = 0;
+  for (const t of toks) { const core = t.replace(/^\(/, "").replace(/\)$/, ""); if (isChordTok(core)) n++; else if (!FILLER_RE.test(t)) return false; }
+  return n > 0;
+}
+const INLINE_RE = /\[([^\]\s]+)\]/g;
+const hasInlineChords = l => [...l.matchAll(INLINE_RE)].some(m => isChordTok(m[1]));
+function trChordLine(line, semi, flats) {
+  if (!semi) return line;
+  let out = ""; const re = /\S+/g; let m;
+  while ((m = re.exec(line))) {
+    let tok = m[0]; const core = tok.replace(/^\(/, "").replace(/\)$/, "");
+    if (isChordTok(core)) tok = tok.replace(core, trChord(core, semi, flats));
+    let col = m.index; if (out.length && col <= out.length) col = out.length + 1;
+    out += " ".repeat(Math.max(0, col - out.length)) + tok;
+  }
+  return out;
+}
+function splitInline(line, semi, flats) {
+  let chords = "", lyr = "", last = 0; let m; const re = new RegExp(INLINE_RE.source, "g");
+  while ((m = re.exec(line))) {
+    if (!isChordTok(m[1])) continue;
+    lyr += line.slice(last, m.index); last = re.lastIndex;
+    const c = trChord(m[1], semi, flats);
+    if (chords.length && lyr.length < chords.length + 1) lyr += " ".repeat(chords.length + 1 - lyr.length);
+    chords += " ".repeat(Math.max(0, lyr.length - chords.length)) + c;
+  }
+  lyr += line.slice(last);
+  return { chords, lyr };
+}
+function chordSpans(line) {
+  return line.split(/(\s+)/).map(t => { if (!t || /^\s+$/.test(t)) return t; const core = t.replace(/^\(/, "").replace(/\)$/, ""); return isChordTok(core) ? `<span class="ch">${esc(t)}</span>` : `<span class="fill">${esc(t)}</span>`; }).join("");
+}
+function linkify(s) { return s.split(/(https?:\/\/[^\s<>"]+)/).map((p, i) => i % 2 ? `<a href="${esc(p)}" target="_blank" rel="noopener">${esc(p)}</a>` : esc(p)).join(""); }
+function chartHTML(text, semi, flats) {
+  const out = [];
+  for (const raw of (text || "").replace(/\r\n?/g, "\n").split("\n")) {
+    const line = raw.replace(/\t/g, "    ");
+    const dir = line.match(/^\s*\{\s*([a-z_]+)\s*(?::\s*(.*?))?\s*\}\s*$/i);
+    if (dir) {
+      const k = dir[1].toLowerCase(), v = dir[2] || "";
+      if (["c", "comment", "ci", "comment_italic", "cb", "comment_box"].includes(k)) out.push(`<div class="ln cmt">${esc(v)}</div>`);
+      else if (["soc", "start_of_chorus"].includes(k)) out.push(`<div class="ln sec">${esc(v || "Chorus")}</div>`);
+      else if (["sov", "start_of_verse"].includes(k)) out.push(`<div class="ln sec">${esc(v || "Verse")}</div>`);
+      else if (["sob", "start_of_bridge"].includes(k)) out.push(`<div class="ln sec">${esc(v || "Bridge")}</div>`);
+      continue;
+    }
+    if (!line.trim()) { out.push('<div class="ln"> </div>'); continue; }
+    if (isTabLine(line)) { out.push(`<div class="ln tab">${esc(line)}</div>`); continue; }
+    if (isSectionLine(line)) { out.push(`<div class="ln sec">${esc(cleanSection(line))}</div>`); continue; }
+    if (hasInlineChords(line)) {
+      const { chords, lyr } = splitInline(line, semi, flats);
+      out.push(`<div class="ln">${chordSpans(chords)}</div>`);
+      if (lyr.trim()) out.push(`<div class="ln">${linkify(lyr)}</div>`);
+      continue;
+    }
+    if (isChordLine(line)) { out.push(`<div class="ln">${chordSpans(trChordLine(line, semi, flats))}</div>`); continue; }
+    out.push(`<div class="ln">${linkify(line)}</div>`);
+  }
+  return out.join("");
+}
+function chordsIn(text) {
+  const out = [];
+  for (const line of (text || "").split("\n")) {
+    if (isTabLine(line) || isSectionLine(line)) continue;
+    const inl = [...line.matchAll(INLINE_RE)].map(m => m[1]).filter(isChordTok);
+    if (inl.length) { out.push(...inl); continue; }
+    if (isChordLine(line)) for (const t of line.trim().split(/\s+/)) { const c = t.replace(/^\(/, "").replace(/\)$/, ""); if (isChordTok(c)) out.push(c); }
+  }
+  return out.filter(c => !/^N/.test(c));
+}
+function detectKey(text) {
+  const cs = chordsIn(text).map(parseChord).filter(Boolean);
+  if (cs.length < 2) return "";
+  let best = null;
+  for (let t = 0; t < 12; t++) for (const minor of [false, true]) {
+    const maj = minor ? (t + 3) % 12 : t;
+    const deg = [[0, "M"], [2, "m"], [4, "m"], [5, "M"], [7, "M"], [9, "m"], [11, "d"]].map(([s, q]) => [(maj + s) % 12, q]);
+    let sc = 0;
+    for (const c of cs) {
+      const q = c.dim ? "d" : c.minor ? "m" : "M";
+      const d = deg.find(x => x[0] === c.root);
+      if (d) sc += d[1] === q ? 2 : (minor && c.root === (t + 7) % 12 && q === "M") ? 2 : 0.5;
+      else if (!minor && c.root === (t + 10) % 12 && q === "M") sc += 1; // bVII, common in rock
+      else sc -= 1;
+    }
+    const isT = c => c.root === t && c.minor === minor && !c.dim;
+    if (isT(cs[0])) sc += 3;
+    if (isT(cs[cs.length - 1])) sc += 2;
+    sc += cs.filter(isT).length * 0.5;
+    if (!best || sc > best.sc) best = { sc, t, minor };
+  }
+  return keyName(best.t, best.minor);
+}
+function diatonic(key) {
+  const p = key && parseChord(key); if (!p) return [];
+  const f = keyUsesFlats(key);
+  const steps = p.minor ? [[0, "m"], [2, "dim"], [3, ""], [5, "m"], [7, "m"], [7, ""], [8, ""], [10, ""]] : [[0, ""], [2, "m"], [4, "m"], [5, ""], [7, ""], [9, "m"], [11, "dim"], [10, ""]];
+  return [...new Set(steps.map(([s, q]) => noteName(p.root + s, f) + q))];
+}
+const songKey = s => s.key || detectKey(s.chart) || "";
+
+/* ---------- importing text (OnSong, ChordPro, Ultimate Guitar) ---------- */
+const META_RE = /^(title|artist|key|capo|tempo|bpm|time|duration|copyright|ccli|author|book|number|flow|keywords|tuning|difficulty|strumming)\s*:\s*(.*)$/i;
+function parseSongText(text, fallbackTitle) {
+  const meta = {}; const body = [];
+  for (const l of text.replace(/\r\n?/g, "\n").split("\n")) {
+    const m = l.match(/^\s*\{\s*(title|t|subtitle|st|artist|key|capo|tempo)\s*:\s*(.*?)\s*\}\s*$/i);
+    if (m) { const k = m[1].toLowerCase(); if (k === "t" || k === "title") meta.title = m[2]; else if (k === "st" || k === "subtitle" || k === "artist") meta.artist = meta.artist || m[2]; else meta[k] = m[2]; continue; }
+    body.push(l);
+  }
+  let i = 0; while (i < body.length && !body[i].trim()) i++;
+  let plain = 0;
+  while (i < body.length && body[i].trim()) {
+    const l = body[i].trim(); const mm = l.match(META_RE);
+    if (mm) { const k = mm[1].toLowerCase(); if (k === "tuning") break; meta[k === "bpm" ? "tempo" : k] = mm[2].trim(); i++; continue; }
+    if (plain < 2 && l.length <= 70 && !isChordLine(l) && !isSectionLine(l) && !hasInlineChords(l) && !isTabLine(l)) {
+      const ug = l.match(/^(.*?)\s+(?:chords|tab|tabs|bass|ukulele chords|guitar pro|official)?\s*by\s+(.+)$/i);
+      if (plain === 0 && !meta.title && ug) { meta.title = ug[1].trim(); meta.artist = meta.artist || ug[2].trim(); plain = 2; }
+      else if (plain === 0 && !meta.title) { meta.title = l; plain = 1; }
+      else if (!meta.artist) { meta.artist = l.replace(/^by\s+/i, ""); plain = 2; }
+      else break;
+      i++; continue;
+    }
+    break;
+  }
+  const chart = body.slice(i).join("\n").replace(/^\n+/, "").replace(/\s+$/, "");
+  const capo = parseInt(meta.capo, 10);
+  let key = (meta.key || "").trim().replace(/\s*(major|maj)$/i, "").replace(/\s*minor$/i, "m");
+  if (key && !ALL_KEYS.includes(key)) { const p = parseChord(key); key = p ? keyName(p.root, p.minor) : ""; }
+  return { title: meta.title || fallbackTitle || "Untitled song", artist: meta.artist || "", key, capo: isNaN(capo) ? 0 : capo, tempo: (meta.tempo || "").replace(/\D+/g, ""), chart };
+}
+
+/* ---------- OnSong backup (.backup = zip holding OnSong's database and media) ---------- */
+const SONG_EXT_RE = /\.(onsong|chordpro|chopro|cho|crd|pro|txt)$/i;
+const ANY_SONG_FILE_RE = /\.(pdf|onsong|chordpro|chopro|cho|crd|pro|txt)$/i;
+const hasWords = s => /[\p{L}\p{N}]/u.test(s || "");
+function asText(v) {
+  if (typeof v === "string") return v;
+  if (v instanceof Uint8Array) {
+    try { const t = new TextDecoder("utf-8", { fatal: true }).decode(v); const bad = (t.match(/[\u0000-\u0008\u000e-\u001f]/g) || []).length; return bad > t.length * 0.02 ? "" : t; } catch { return ""; }
+  }
+  return v == null ? "" : String(v);
+}
+function chartScore(v) {
+  const t = asText(v); if (!t || !t.includes("\n")) return 0;
+  const ls = t.split("\n"); if (ls.length < 3) return 0;
+  let s = 0; for (const l of ls.slice(0, 200)) { if (isChordLine(l) || hasInlineChords(l)) s += 2; else if (isSectionLine(l)) s += 1; }
+  return s;
+}
+async function openBackupZip(data, JSZip) {
+  const zip = await JSZip.loadAsync(data);
+  const entries = Object.values(zip.files).filter(f => !f.dir && !/(^|\/)(__MACOSX|\.)/.test(f.name));
+  return entries;
+}
+const fileBase = n => n.split("/").pop();
+async function findDatabases(entries, SQL) {
+  const dbs = [];
+  for (const f of entries) {
+    const n = fileBase(f.name);
+    if (/-(wal|shm|journal)$/i.test(n) || /\.(pdf|png|jpe?g|gif|mp3|m4a|wav|aac|mov|mp4|onsong|chordpro|cho|txt|plist|xml|json|css|html?)$/i.test(n)) continue;
+    const byName = /\.(sqlite3?|db|sqlitedb)$/i.test(n);
+    let bytes = null;
+    if (!byName) { if ((f._data && f._data.uncompressedSize > 300e6)) continue; bytes = await f.async("uint8array"); if (new TextDecoder().decode(bytes.subarray(0, 15)) !== "SQLite format 3") continue; }
+    try { dbs.push({ name: f.name, db: new SQL.Database(bytes || await f.async("uint8array")), wal: entries.some(e => e.name === f.name + "-wal") }); } catch (e) { console.warn("not a database", f.name, e); }
+  }
+  return dbs;
+}
+function dbHelpers(db) {
+  const q = sql => { const r = db.exec(sql)[0]; return r ? r.values.map(v => Object.fromEntries(r.columns.map((c, i) => [c, v[i]]))) : []; };
+  const tables = q("SELECT name FROM sqlite_master WHERE type='table'").map(r => r.name).filter(t => !/^sqlite_/.test(t));
+  const cols = t => q(`PRAGMA table_info("${t.replace(/"/g, '""')}")`).map(r => r.name);
+  const pick = (list, ...names) => { for (const n of names) { const c = list.find(x => x.toLowerCase() === n.toLowerCase()); if (c) return c; } return null; };
+  return { q, tables, cols, pick };
+}
+/* Find the table that holds songs: the one whose text column looks most like chord charts. */
+function findSongTable(h) {
+  let best = null;
+  for (const t of h.tables) {
+    if (/set|item|book|tag|link|style|pref|meta|history|media|file|keyword|collection/i.test(t) && !/^z?songs?$/i.test(t)) continue;
+    const cs = h.cols(t);
+    const titleCol = h.pick(cs, "title", "ZTITLE", "name", "ZNAME", "songTitle");
+    if (!titleCol) continue;
+    const rows = h.q(`SELECT * FROM "${t.replace(/"/g, '""')}" LIMIT 400`);
+    const scores = {};
+    for (const r of rows) for (const c of cs) { const s = chartScore(r[c]); if (s) scores[c] = (scores[c] || 0) + s; }
+    const contentCol = Object.keys(scores).sort((a, b) => scores[b] - scores[a])[0] || h.pick(cs, "content", "ZCONTENT");
+    const score = (contentCol ? scores[contentCol] || 0 : 0) + (/^z?songs?$/i.test(t) ? 1 : 0);
+    if (!best || score > best.score) best = { table: t, cols: cs, titleCol, contentCol, score };
+  }
+  return best;
+}
+/* OnSong keeps sticky notes in JSON (or an older XML plist) inside "notes" columns of Song,
+   SongAttachment and SongSetItem rows: {"annotations":[{"$class":"OSAnnotationNote","x":0.81,"y":0.19,...}]}.
+   x and y are the note's centre as a fraction of the page. */
+function plistToJson(xml) {
+  if (typeof DOMParser === "undefined") return null;
+  const doc = new DOMParser().parseFromString(xml, "application/xml");
+  const conv = n => {
+    if (!n) return null;
+    switch (n.tagName) {
+      case "dict": { const o = {}; const k = [...n.children]; for (let i = 0; i + 1 < k.length; i += 2) o[k[i].textContent] = conv(k[i + 1]); return o; }
+      case "array": return [...n.children].map(conv);
+      case "integer": case "real": return +n.textContent;
+      case "true": return true; case "false": return false;
+      default: return n.textContent;
+    }
+  };
+  return conv(doc.querySelector("plist > *"));
+}
+function noteText(a) {
+  for (const k of ["contents", "text", "string", "content", "body", "note", "attributedString", "title"]) {
+    const v = a[k];
+    if (typeof v === "string" && v.trim()) return v.trim();
+    if (v && typeof v === "object" && typeof v.string === "string" && v.string.trim()) return v.string.trim();
+  }
+  let best = "";
+  for (const [k, v] of Object.entries(a)) if (typeof v === "string" && !/font|class|color|colour|id$|uuid|align|type/i.test(k) && /\s|[a-z]{3}/i.test(v) && v.length > best.length) best = v.trim();
+  return best;
+}
+function parseAnnotations(raw) {
+  const t = asText(raw).trim(); if (!t) return [];
+  let j = null;
+  if (t[0] === "{") { try { j = JSON.parse(t); } catch { return []; } }
+  else if (/^<\?xml|^<plist/.test(t)) j = plistToJson(t);
+  const list = j && (j.annotations || j.stickyNotes || j.notes);
+  if (!Array.isArray(list)) return [];
+  return list.filter(a => a && typeof a === "object").map(a => {
+    const cls = String(a.$class || a.class || a.type || "");
+    const text = noteText(a);
+    const pg = a.pageIndex != null ? +a.pageIndex : a.page != null ? +a.page - 1 : a.pageNumber != null ? +a.pageNumber - 1 : 0;
+    return { isNote: !!text && (!cls || /note|sticky|text/i.test(cls)), cls, text, x: +a.x, y: +a.y, page: isFinite(pg) && pg >= 0 ? pg : 0 };
+  });
+}
+function hashStr(s) { let h = 2166136261; for (let i = 0; i < s.length; i++) { h ^= s.charCodeAt(i); h = Math.imul(h, 16777619); } return (h >>> 0).toString(36); }
+function annotationsToStickies(anns, songKey, hasPdfView, chart) {
+  const out = [], seen = new Set(); let drawings = 0;
+  const lines = Math.max(10, (chart || "").split("\n").length);
+  for (const a of anns) {
+    if (!a.isNote) { if (a.cls) drawings++; continue; }
+    const x = isFinite(a.x) ? clamp(a.x, 0, 1) : 0.8, y = isFinite(a.y) ? clamp(a.y, 0, 1) : 0.1;
+    const id = "os-n-" + hashStr(songKey + "|" + a.text + "|" + x.toFixed(3) + "|" + y.toFixed(3));
+    const dedupe = a.text + "|" + x.toFixed(2) + "|" + y.toFixed(2);
+    if (seen.has(dedupe)) continue; seen.add(dedupe);
+    const mode = a.mode || (hasPdfView ? "pdf" : "text");
+    if (mode === "pdf") out.push({ id, text: a.text, m: "pdf", page: a.page, px: Math.round(clamp(x - 0.11, 0, 0.78) * 1e4) / 1e4, py: Math.round(clamp(y - 0.1, 0, 0.95) * 1e4) / 1e4, x: 0, y: 0 });
+    else out.push({ id, text: a.text, m: "text", x: Math.round(Math.max(0, x * 32 - 7) * 100) / 100, y: Math.round(Math.max(0, y * lines * 1.4 - 2) * 100) / 100 });
+  }
+  return { stickies: out, drawings };
+}
+async function readOnSongBackup(data, { JSZip, SQL }) {
+  const entries = await openBackupZip(data, JSZip);
+  const byBase = new Map(); for (const f of entries) { const k = fileBase(f.name).toLowerCase(); if (!byBase.has(k)) byBase.set(k, f); }
+  const pdfOf = async f => new Blob([await f.async("uint8array")], { type: "application/pdf" });
+  const out = { songs: [], sets: [], hadDb: false };
+  const used = new Set(); const titles = new Set();
+  const dbs = await findDatabases(entries, SQL);
+  for (const { db } of dbs) {
+    try {
+      const h = dbHelpers(db);
+      const st = findSongTable(h);
+      if (!st || (!st.score && !/^z?songs?$/i.test(st.table))) continue;
+      out.hadDb = true;
+      const c = { id: h.pick(st.cols, "ID", "Z_PK", "uuid", "songID"), artist: h.pick(st.cols, "byline", "artist", "ZBYLINE", "ZARTIST", "author"), key: h.pick(st.cols, "key", "ZKEY", "songKey"), notes: h.pick(st.cols, "notes"), deleted: h.pick(st.cols, "deleted") };
+      /* Sticky notes live on the song, on its attachments (the PDF), and on set items. */
+      const annBySong = new Map();
+      const addAnn = (songId, raw, mode) => { const list = parseAnnotations(raw); if (!list.length) return; const k = String(songId); if (!annBySong.has(k)) annBySong.set(k, []); for (const a of list) annBySong.get(k).push(Object.assign(a, { mode })); };
+      const attT = h.pick(h.tables, "SongAttachment");
+      if (attT) {
+        const ac = h.cols(attT);
+        if (h.pick(ac, "songID") && h.pick(ac, "notes")) for (const a of h.q(`SELECT songID, filename, mimetype, notes FROM "${attT}" WHERE notes IS NOT NULL AND notes LIKE '%nnotation%' OR notes LIKE '%stickyNotes%'`)) {
+          const isPdf = /pdf/i.test(asText(a.mimetype)) || /\.pdf$/i.test(asText(a.filename));
+          addAnn(a.songID, a.notes, isPdf ? "pdf" : "text");
+        }
+      }
+      const itemT0 = h.pick(h.tables, "SongSetItem");
+      if (itemT0 && h.pick(h.cols(itemT0), "notes") && h.pick(h.cols(itemT0), "songID")) for (const it of h.q(`SELECT songID, notes FROM "${itemT0}" WHERE notes LIKE '%nnotation%' OR notes LIKE '%stickyNotes%'`)) addAnn(it.songID, it.notes, null);
+      const folderFiles = new Map();
+      for (const f of entries) { const m = f.name.match(/(?:^|\/)Songs\/([^/]+)\/[^/]+$/); if (m) { if (!folderFiles.has(m[1])) folderFiles.set(m[1], []); folderFiles.get(m[1]).push(f); } }
+      out.notes = 0; out.drawings = 0;
+      for (const r of h.q(`SELECT * FROM "${st.table.replace(/"/g, '""')}"`)) {
+        const title = asText(r[st.titleCol]).trim();
+        if (!hasWords(title)) continue;
+        if (c.deleted && +r[c.deleted] === 1) continue;
+        let content = st.contentCol ? asText(r[st.contentCol]) : "";
+        if (!chartScore(content)) content = "";
+        let pdf = null, pdfName = "";
+        const own = c.id ? folderFiles.get(String(r[c.id])) || [] : [];
+        const ownPdf = own.find(f => /\.pdf$/i.test(f.name));
+        if (ownPdf) { pdf = await pdfOf(ownPdf); pdfName = fileBase(ownPdf.name); used.add(ownPdf.name); }
+        if (!content) { const ownText = own.find(f => SONG_EXT_RE.test(f.name)); if (ownText) { const t = await ownText.async("string"); if (chartScore(t)) { content = t; used.add(ownText.name); } } }
+        for (const v of Object.values(r)) {
+          const s = typeof v === "string" ? v.trim() : "";
+          if (!s || s.length > 500 || !ANY_SONG_FILE_RE.test(s)) continue;
+          const f = byBase.get(fileBase(s).toLowerCase()); if (!f) continue;
+          if (/\.pdf$/i.test(s) && !pdf) { pdf = await pdfOf(f); pdfName = fileBase(f.name); used.add(f.name); }
+          else if (!content && SONG_EXT_RE.test(s)) { const t = await f.async("string"); if (chartScore(t)) { content = t; used.add(f.name); } }
+        }
+        if (!pdf) { const f = byBase.get((title + ".pdf").toLowerCase()); if (f) { pdf = await pdfOf(f); pdfName = fileBase(f.name); used.add(f.name); } }
+        if (!content) for (const ext of [".onsong", ".chordpro", ".cho", ".txt", ".pro", ".crd"]) { const f = byBase.get((title + ext).toLowerCase()); if (f) { const t = await f.async("string"); if (chartScore(t)) { content = t; used.add(f.name); break; } } }
+        if (!content && !pdf) continue;
+        const p = parseSongText(content || title, title);
+        const dbKey = c.key ? asText(r[c.key]).trim() : "";
+        const kp = dbKey && /^[A-G]/.test(dbKey) && parseChord(dbKey);
+        const artist = c.artist ? asText(r[c.artist]).trim() : "";
+        const osId = String(c.id ? r[c.id] : title);
+        const anns = (c.notes ? parseAnnotations(r[c.notes]).map(a => Object.assign(a, { mode: null })) : []).concat(annBySong.get(osId) || []);
+        const chart = content ? p.chart : "";
+        const { stickies, drawings } = annotationsToStickies(anns, osId, !!pdf && !chartScore(chart), chart);
+        out.notes += stickies.length; out.drawings += drawings;
+        out.songs.push({ osId, title, artist: hasWords(artist) ? artist : p.artist, key: kp ? keyName(kp.root, kp.minor) : p.key, capo: p.capo, tempo: p.tempo, chart, pdf, pdfName, stickies });
+        titles.add(title.toLowerCase());
+      }
+      const setT = h.pick(h.tables, "SongSet", "SongSets", "Set", "Sets", "ZSONGSET", "ZSET"), itemT = h.pick(h.tables, "SongSetItem", "SongSetItems", "SetItem", "SetItems", "ZSONGSETITEM", "ZSETITEM");
+      if (setT) {
+        const sc = h.cols(setT); const sid = h.pick(sc, "ID", "Z_PK", "uuid"), stitle = h.pick(sc, "title", "name", "ZTITLE", "ZNAME");
+        const ic = itemT ? h.cols(itemT) : [];
+        const iset = h.pick(ic, "setID", "set_id", "ZSET", "ZSONGSET"), isong = h.pick(ic, "songID", "song_id", "ZSONG"), iord = h.pick(ic, "orderIndex", "position", "ord", "ZORDERINDEX", "ZPOSITION", "ZORDER");
+        const items = itemT && iset && isong ? h.q(`SELECT * FROM "${itemT}"`) : [];
+        if (sid && stitle) for (const s of h.q(`SELECT * FROM "${setT}"`)) {
+          const name = asText(s[stitle]).trim(); if (!hasWords(name)) continue;
+          const id = String(s[sid]);
+          const songIds = items.filter(i => String(i[iset]) === id).sort((a, b) => (+a[iord] || 0) - (+b[iord] || 0)).map(i => String(i[isong]));
+          out.sets.push({ osId: id, name, songIds });
+        }
+      }
+    } catch (e) { console.warn("database read failed", e); }
+    finally { db.close(); }
+  }
+  /* Song files stored loose in the backup (not already matched to a database row). */
+  for (const f of entries) {
+    if (used.has(f.name) || /(^|\/)(help|documentation|manual)\//i.test(f.name)) continue;
+    const n = fileBase(f.name), title = n.replace(/\.[^.]+$/, "");
+    if (titles.has(title.toLowerCase()) || !hasWords(title)) continue;
+    if (SONG_EXT_RE.test(n)) {
+      const t = await f.async("string"); if (!chartScore(t)) continue;
+      const p = parseSongText(t, title);
+      out.songs.push(Object.assign({ osId: f.name }, p)); titles.add(p.title.toLowerCase());
+    } else if (/\.pdf$/i.test(n) && !out.hadDb) {
+      out.songs.push({ osId: f.name, title, artist: "", key: "", capo: 0, tempo: "", chart: "", pdf: await pdfOf(f), pdfName: n });
+    }
+  }
+  return out;
+}
+/* A plain-text description of what's inside a backup, for troubleshooting. */
+async function inspectBackup(data, { JSZip, SQL }) {
+  const entries = await openBackupZip(data, JSZip);
+  const L = ["Stagebook: OnSong backup report", `Files in backup: ${entries.length}`];
+  const byExt = {}; for (const f of entries) { const m = fileBase(f.name).match(/\.([^.]+)$/); const e = m ? m[1].toLowerCase() : "(none)"; byExt[e] = (byExt[e] || 0) + 1; }
+  L.push("By type: " + Object.entries(byExt).sort((a, b) => b[1] - a[1]).map(([e, n]) => `${e} ${n}`).join(", "));
+  const folders = {}; for (const f of entries) { const d = f.name.includes("/") ? f.name.slice(0, f.name.lastIndexOf("/")) : "(top)"; folders[d] = (folders[d] || 0) + 1; }
+  L.push("Folders: " + Object.entries(folders).slice(0, 30).map(([d, n]) => `${d} (${n})`).join(", "));
+  L.push("Sample files: " + entries.slice(0, 25).map(f => f.name).join(" | "));
+  const NOTE_RE = /annot|sticky|note|draw|mark|ink|layer|overlay|highlight|comment/i;
+  const odd = entries.filter(f => !/\.(pdf|onsong|chordpro|cho|txt|png|jpe?g|gif|heic|mp3|m4a|wav|aac|mov|mp4|sqlite3?|db)$/i.test(f.name));
+  if (odd.length) L.push("Other files: " + odd.slice(0, 40).map(f => f.name).join(" | "));
+  for (const f of entries.filter(f => NOTE_RE.test(fileBase(f.name)) || /\.(json|plist|xml|annotations?)$/i.test(f.name)).slice(0, 6)) {
+    const b = await f.async("uint8array");
+    const t = asText(b);
+    L.push(`File ${f.name} (${b.length} bytes): ${t ? JSON.stringify(t.slice(0, 300)) : new TextDecoder().decode(b.subarray(0, 8)) === "bplist00" ? "binary plist" : "binary"}`);
+  }
+  const show = (v, n = 80) => {
+    if (v instanceof Uint8Array) { const head = new TextDecoder().decode(v.subarray(0, 8)); const t = asText(v); return JSON.stringify(`<${v.length} bytes${head === "bplist00" ? ", binary plist" : ""}${t ? ": " + t.slice(0, n) : ""}>`); }
+    return JSON.stringify(asText(v).slice(0, n));
+  };
+  for (const { name, db, wal } of await findDatabases(entries, SQL)) {
+    L.push("", `DATABASE ${name}${wal ? " (has -wal file)" : ""}`);
+    try {
+      const h = dbHelpers(db);
+      const st = findSongTable(h);
+      L.push(`Song table guess: ${st ? `${st.table} title=${st.titleCol} content=${st.contentCol} score=${st.score}` : "none"}`);
+      for (const t of h.tables.slice(0, 80)) {
+        const n = h.q(`SELECT COUNT(*) AS n FROM "${t.replace(/"/g, '""')}"`)[0].n;
+        const cs = h.cols(t);
+        L.push(`- ${t} (${n} rows): ${cs.join(", ")}`);
+        const isNotes = NOTE_RE.test(t) || cs.some(c => NOTE_RE.test(c));
+        if ((/song|set/i.test(t) || isNotes) && n) for (const r of h.q(`SELECT * FROM "${t.replace(/"/g, '""')}" LIMIT ${isNotes ? 3 : 2}`)) L.push("    " + Object.entries(r).filter(([, v]) => v != null && v !== "").map(([k, v]) => `${k}=${show(v, isNotes || NOTE_RE.test(k) ? 300 : 80)}`).join("; ").slice(0, isNotes ? 2500 : 900));
+      }
+    } catch (e) { L.push("Couldn't read: " + e.message); }
+    finally { db.close(); }
+  }
+  return L.join("\n");
+}
+
+/* ---------- IndexedDB: the copy on this device ---------- */
+const IDB = (() => {
+  let dbp;
+  function open() {
+    if (!dbp) dbp = new Promise((res, rej) => {
+      let r; try { r = indexedDB.open("stagebook", 1); } catch (e) { rej(e); return; }
+      r.onupgradeneeded = () => { const d = r.result; for (const s of ["docs", "blobs", "meta"]) if (!d.objectStoreNames.contains(s)) d.createObjectStore(s); };
+      r.onsuccess = () => res(r.result); r.onerror = () => rej(r.error);
+    });
+    return dbp;
+  }
+  async function run(store, mode, fn) {
+    try {
+      const d = await open();
+      return await new Promise((res, rej) => { const t = d.transaction(store, mode); const req = fn(t.objectStore(store)); t.oncomplete = () => res(req ? req.result : undefined); t.onerror = () => rej(t.error); t.onabort = () => rej(t.error); });
+    } catch (e) { console.warn("Device storage error", e); state.localErr = true; return undefined; }
+  }
+  return {
+    get: (s, k) => run(s, "readonly", st => st.get(k)),
+    put: (s, k, v) => run(s, "readwrite", st => { st.put(v, k); }),
+    del: (s, k) => run(s, "readwrite", st => { st.delete(k); }),
+    entries: async s => { try { const d = await open(); return await new Promise((res, rej) => { const out = []; const c = d.transaction(s, "readonly").objectStore(s).openCursor(); c.onsuccess = () => { const cur = c.result; if (cur) { out.push([cur.key, cur.value]); cur.continue(); } else res(out); }; c.onerror = () => rej(c.error); }); } catch { state.localErr = true; return []; } },
+  };
+})();
+
+/* ---------- state ---------- */
+const COLS = ["songs", "sets", "ink"];
+const state = {
+  songs: new Map(), sets: new Map(), ink: new Map(),
+  route: { view: "songs" }, q: "", tag: "", setGroup: "",
+  prefs: Object.assign({ fontPx: 20, fit: true, pencil: true, fingerDraw: false, tool: "p", color: "#e11d48", inline: false, awake: true }, loadPrefs()),
+  cloud: "connecting", pending: new Set(), failed: new Map(), err: null, lastSync: 0, localErr: false,
+  markup: false, perf: null,
+};
+let cloudDb = null, assetsApi = null, downloadsApi = null;
+
+/* ---------- saving & syncing ---------- */
+function save(col, obj) {
+  obj.updatedAt = Math.max(Date.now(), (obj.updatedAt || 0) + 1);
+  state[col].set(obj.id, obj);
+  IDB.put("docs", col + "/" + obj.id, obj);
+  queue(col + "/" + obj.id);
+}
+let flushT = null, retryT = null, flushing = false;
+function queue(path) {
+  state.pending.add(path); state.failed.delete(path);
+  IDB.put("meta", "pending", [...state.pending]);
+  clearTimeout(flushT); flushT = setTimeout(flush, 700);
+  updateStatus();
+}
+async function flush() {
+  if (!cloudDb || flushing) return;
+  flushing = true; let hadError = false;
+  try {
+    for (const path of [...state.pending]) {
+      const [col, id] = path.split("/");
+      const obj = state[col] && state[col].get(id);
+      if (!obj) { state.pending.delete(path); continue; }
+      const sent = obj.updatedAt;
+      const body = JSON.parse(JSON.stringify(obj)); delete body.id;
+      try {
+        await cloudDb.doc(path).set(body);
+        if ((state[col].get(id) || {}).updatedAt === sent) state.pending.delete(path);
+        state.err = null; state.lastSync = Date.now();
+      } catch (e) {
+        state.err = e;
+        if (e && (e.code === "invalid_argument" || e.code === "quota_exceeded" || e.code === "transform_error")) {
+          state.pending.delete(path); state.failed.set(path, e.code);
+          const what = col === "ink" ? "the markup on " + ((state.songs.get(id) || {}).title || "a song") : (obj.title || obj.name || "an item");
+          toast(`Couldn't back up ${what} to the cloud (${e.code === "quota_exceeded" ? "cloud storage is full" : "it's too large"}). It is still saved on this device.`);
+        } else { hadError = true; break; }
+      }
+    }
+  } finally {
+    flushing = false;
+    IDB.put("meta", "pending", [...state.pending]);
+    updateStatus();
+    if (state.pending.size) { clearTimeout(retryT); retryT = setTimeout(flush, hadError ? 8000 : 400); }
+  }
+}
+const firstSync = { songs: false, sets: false, ink: false };
+function onRemote(col, snap) {
+  let changed = false;
+  for (const d of snap.docs) {
+    const r = d.data(); if (!r) continue;
+    const path = col + "/" + d.id; const l = state[col].get(d.id);
+    const rt = r.updatedAt || 0, lt = l ? l.updatedAt || 0 : -1;
+    if (rt > lt && !state.pending.has(path)) {
+      const copy = JSON.parse(JSON.stringify(r)); copy.id = d.id;
+      state[col].set(d.id, copy); IDB.put("docs", path, copy); changed = true;
+    } else if (lt > rt && !state.pending.has(path)) queue(path);
+  }
+  if (!snap.metadata.fromCache && !firstSync[col]) {
+    firstSync[col] = true;
+    const ids = new Set(snap.docs.map(d => d.id));
+    for (const id of state[col].keys()) if (!ids.has(id)) queue(col + "/" + id);
+  }
+  if (!snap.metadata.fromCache) state.lastSync = Date.now();
+  updateStatus();
+  if (changed) remoteRender(col);
+}
+function remoteRender(col) {
+  const v = state.route.view;
+  if (v === "edit") return;
+  if (v === "perform") { if (col !== "ink") return; }
+  if (document.activeElement && document.activeElement.closest && document.activeElement.closest(".sticky")) return;
+  debounce("remote-render", 250, render);
+}
+async function initCloud() {
+  if (!IN_CLAUDE) { state.cloud = "device"; updateStatus(); backupReminder(); return; }
+  const use = n => (window.claude && window.claude.use ? window.claude.use(n).catch(() => null) : Promise.resolve(null));
+  [cloudDb, assetsApi, downloadsApi] = await Promise.all([use("db"), use("assets"), use("downloads")]);
+  if (!cloudDb) { state.cloud = "local"; updateStatus(); return; }
+  state.cloud = "on";
+  for (const col of COLS) cloudDb.collection(col).onSnapshot(s => onRemote(col, s), e => { state.err = e; state.cloud = e && e.code === "revoked" ? "local" : "on"; updateStatus(); });
+  flush();
+  retryPdfUploads();
+  if (state.route.view === "backup") render();
+}
+window.addEventListener("online", () => flush());
+function statusInfo() {
+  if (state.cloud === "connecting") return ["", "Connecting…", "Looking for your cloud backup."];
+  if (state.cloud === "device") {
+    const days = lastBackupDays();
+    if (days == null || days >= 7) return ["warn", days == null ? "Saved on this iPad · no backup yet" : `Saved on this iPad · backup ${days} days old`, "Everything is saved on this iPad. Make a backup file now and then so a lost or broken iPad can't take your songs with it."];
+    return ["ok", "Saved on this iPad", `Everything is saved on this iPad. Last backup file: ${days === 0 ? "today" : days === 1 ? "yesterday" : days + " days ago"}.`];
+  }
+  if (state.cloud === "local") return ["warn", "This device only", "Cloud backup isn't available right now, so changes are saved on this device only. Open Backup to export a copy."];
+  if (state.pending.size && state.err) return ["warn", "Saved on device · cloud retrying", "Everything is saved on this device. The cloud copy will catch up when the connection returns."];
+  if (state.pending.size) return ["", "Saving…", "Sending your latest changes to the cloud."];
+  if (state.failed.size) return ["bad", "Some items not backed up", "Open Backup for details."];
+  return ["ok", "Saved to cloud", "Every song, set and markup is saved on this device and in the cloud."];
+}
+function updateStatus() {
+  const el = $("#status"); if (!el) return;
+  const [cls, label, tip] = statusInfo();
+  el.className = "status " + cls; el.querySelector("span").textContent = label; el.title = tip;
+}
+
+/* ---------- PDFs ---------- */
+const PDFJS = IN_CLAUDE ? "https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.min.js" : "vendor/pdf.min.js";
+const PDFWORKER = IN_CLAUDE ? "https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.worker.min.js" : "vendor/pdf.worker.min.js";
+function loadScript(src) { return new Promise((res, rej) => { const s = document.createElement("script"); s.src = src; s.onload = res; s.onerror = () => rej(new Error("Could not load " + src)); document.head.appendChild(s); }); }
+let pdfjsP = null;
+function pdfjs() {
+  /* Inside Claude the worker can only run on the main thread; the stand-alone app gets a real worker. */
+  if (!pdfjsP) pdfjsP = (async () => { await loadScript(PDFJS); if (IN_CLAUDE) await loadScript(PDFWORKER); window.pdfjsLib.GlobalWorkerOptions.workerSrc = PDFWORKER; return window.pdfjsLib; })();
+  pdfjsP.catch(() => { pdfjsP = null; });
+  return pdfjsP;
+}
+async function openPdf(blob) { const lib = await pdfjs(); const data = new Uint8Array(await blob.arrayBuffer()); return lib.getDocument({ data, isEvalSupported: false }).promise; }
+async function pdfToText(pdf) {
+  const lines = []; const urls = [];
+  for (let p = 1; p <= pdf.numPages; p++) {
+    const page = await pdf.getPage(p);
+    const tc = await page.getTextContent();
+    try { (await page.getAnnotations()).forEach(a => { if (a.url) urls.push(a.url); }); } catch {}
+    const items = tc.items.filter(it => it.str && it.str.length);
+    if (!items.length) continue;
+    const ws = items.filter(it => it.str.trim().length > 1 && it.width > 0).map(it => it.width / it.str.length).sort((a, b) => a - b);
+    const cw = ws.length ? ws[Math.floor(ws.length / 2)] : 5;
+    const rows = [];
+    for (const it of items) {
+      const x = it.transform[4], y = it.transform[5], fh = Math.hypot(it.transform[2], it.transform[3]) || 10;
+      let row = rows.find(r => Math.abs(r.y - y) < fh * 0.45);
+      if (!row) { row = { y, fh, items: [] }; rows.push(row); }
+      row.items.push({ x, str: it.str });
+    }
+    rows.sort((a, b) => b.y - a.y);
+    const minX = Math.min(...items.map(it => it.transform[4]));
+    let prev = null;
+    for (const r of rows) {
+      if (prev && (prev.y - r.y) / Math.max(r.fh, prev.fh) > 1.9) lines.push("");
+      prev = r;
+      r.items.sort((a, b) => a.x - b.x);
+      let s = "";
+      for (const it of r.items) {
+        const col = Math.max(0, Math.round((it.x - minX) / cw));
+        if (s.length < col) s += " ".repeat(col - s.length);
+        else if (s.length && !s.endsWith(" ") && !it.str.startsWith(" ")) s += " ";
+        s += it.str;
+      }
+      lines.push(s.replace(/\s+$/, ""));
+    }
+    lines.push("");
+  }
+  return { text: lines.join("\n"), urls };
+}
+function cleanPdfText(text, urls) {
+  let tabUrl = urls.find(u => /ultimate-guitar\.com/i.test(u)) || "";
+  const keep = [];
+  for (const l of text.split("\n")) {
+    const u = l.match(/https?:\/\/[^\s]*ultimate-guitar\.com[^\s]*/i);
+    if (u) { tabUrl = tabUrl || u[0]; continue; }
+    if (/ultimate-guitar|^\s*page\s+\d+(\s*(\/|of)\s*\d+)?\s*$|^\s*\d+\s*\/\s*\d+\s*$|^\s*\d{1,2}\/\d{1,2}\/\d{2,4},?\s+\d/i.test(l)) continue;
+    keep.push(l);
+  }
+  return { text: keep.join("\n").replace(/\n{3,}/g, "\n\n"), tabUrl };
+}
+/* PDFs are kept on the device as raw bytes. Safari can lose Blob objects stored in IndexedDB
+   ("The object can not be found here"), so a Blob is never stored directly. */
+async function putPdf(id, blob) {
+  const bytes = await blob.arrayBuffer();
+  await IDB.put("blobs", "pdf:" + id, { type: "application/pdf", bytes });
+  return new Blob([bytes], { type: "application/pdf" });
+}
+async function readLocalPdf(id) {
+  const v = await IDB.get("blobs", "pdf:" + id);
+  if (!v) return null;
+  try {
+    if (v.bytes) return new Blob([v.bytes], { type: "application/pdf" });
+    if (v instanceof Blob) { const bytes = await v.arrayBuffer(); await IDB.put("blobs", "pdf:" + id, { type: "application/pdf", bytes }); return new Blob([bytes], { type: "application/pdf" }); }
+  } catch (e) { console.warn("Stored PDF is unreadable", id, e); IDB.del("blobs", "pdf:" + id); }
+  return null;
+}
+async function getPdfBlob(song) {
+  const local = await readLocalPdf(song.id);
+  if (local) return local;
+  const src = song.pdf && (song.pdf.url || (song.pdf.assetId ? "/_blob/" + song.pdf.assetId : ""));
+  if (!src) return null;
+  try { const r = await fetch(src); if (!r.ok) return null; return await putPdf(song.id, await r.blob()); } catch { return null; }
+}
+async function uploadPdf(song, blob) {
+  if (!assetsApi) return false;
+  try {
+    const r = await assetsApi.upload(blob, { type: "application/pdf" });
+    const s = state.songs.get(song.id) || song;
+    s.pdf = Object.assign({}, s.pdf, { assetId: r.id, url: r.url }); delete s.pdf.local;
+    save("songs", s); return true;
+  } catch (e) { console.warn("PDF upload failed", e); return false; }
+}
+async function retryPdfUploads() {
+  if (!assetsApi) return;
+  for (const s of state.songs.values()) if (s.pdf && s.pdf.local && !s.pdf.assetId && !s.deleted) { const b = await readLocalPdf(s.id); if (b) await uploadPdf(s, b); }
+}
+async function songFromPdf(file) {
+  const song = newSong({ title: file.name.replace(/\.pdf$/i, "") });
+  song.pdf = { name: file.name, size: file.size, local: true };
+  file = await putPdf(song.id, file);
+  try {
+    const pdf = await openPdf(file);
+    const { text, urls } = await pdfToText(pdf);
+    const { text: clean, tabUrl } = cleanPdfText(text, urls);
+    const parsed = parseSongText(clean, song.title);
+    Object.assign(song, { title: parsed.title, artist: parsed.artist, key: parsed.key, capo: parsed.capo, tempo: parsed.tempo, chart: parsed.chart, tabUrl: tabUrl || "" });
+    const chordLines = parsed.chart.split("\n").filter(l => isChordLine(l) || hasInlineChords(l)).length;
+    song.view = chordLines >= 3 ? "text" : "pdf";
+  } catch (e) { console.warn(e); song.view = "pdf"; }
+  save("songs", song);
+  uploadPdf(song, file);
+  return song;
+}
+
+const JSZIP = IN_CLAUDE ? "https://cdnjs.cloudflare.com/ajax/libs/jszip/3.10.1/jszip.min.js" : "vendor/jszip.min.js";
+const SQLJS = IN_CLAUDE ? "https://cdn.jsdelivr.net/npm/sql.js@1.8.0/dist/sql-asm.js" : "vendor/sql-asm.js";
+let backupLibsP = null;
+function backupLibs() {
+  if (!backupLibsP) backupLibsP = (async () => { if (!window.JSZip) await loadScript(JSZIP); if (!window.initSqlJs) await loadScript(SQLJS); return { JSZip: window.JSZip, SQL: await window.initSqlJs() }; })();
+  backupLibsP.catch(() => { backupLibsP = null; });
+  return backupLibsP;
+}
+const safeId = s => String(s).replace(/[^A-Za-z0-9_-]+/g, "_").slice(0, 120) || uid();
+async function importOnSongBackup(file) {
+  toast("Reading your OnSong backup. Large libraries can take a minute…");
+  let res;
+  try { res = await readOnSongBackup(file, await backupLibs()); }
+  catch (e) { console.warn(e); toast("Couldn't open that file as an OnSong backup. In OnSong, make a fresh backup and try again."); return null; }
+  let added = 0, skipped = 0, sets = 0, repaired = 0, notes = 0, last = null;
+  const idMap = new Map();
+  for (const o of res.songs) {
+    const id = "os-" + safeId(o.osId); idMap.set(o.osId, id);
+    const ex = state.songs.get(id);
+    if (ex && !ex.deleted) {
+      let changed = false;
+      if (o.pdf && !(ex.pdf && ex.pdf.assetId) && !(await readLocalPdf(id))) {
+        await putPdf(id, o.pdf);
+        ex.pdf = Object.assign({}, ex.pdf, { name: (ex.pdf && ex.pdf.name) || o.pdfName || "song.pdf", size: o.pdf.size, local: true });
+        repaired++; changed = true;
+      }
+      const have = new Set((ex.stickies || []).map(n => n.id));
+      const fresh = (o.stickies || []).filter(n => !have.has(n.id));
+      if (fresh.length) { ex.stickies = (ex.stickies || []).concat(fresh); notes += fresh.length; changed = true; }
+      if (changed) save("songs", ex); else skipped++;
+      continue;
+    }
+    const s = newSong({ id, title: o.title || "Untitled song", artist: o.artist || "", key: o.key || "", capo: o.capo || 0, tempo: o.tempo || "", chart: o.chart || "", stickies: o.stickies || [] });
+    notes += s.stickies.length;
+    if (o.pdf) { s.pdf = { name: o.pdfName || "song.pdf", size: o.pdf.size, local: true }; await putPdf(id, o.pdf); s.view = s.chart.trim() ? "text" : "pdf"; }
+    save("songs", s); added++; last = s;
+  }
+  for (const t of res.sets) {
+    const id = "os-set-" + safeId(t.osId);
+    if (state.sets.has(id) && !state.sets.get(id).deleted) continue;
+    const items = t.songIds.map(x => idMap.get(x)).filter(Boolean).map(sid => ({ type: "song", id: sid }));
+    if (!items.length) continue;
+    save("sets", newSet({ id, name: t.name, group: "From OnSong", items })); sets++;
+  }
+  retryPdfUploads();
+  toast(`From OnSong: ${added} song${added === 1 ? "" : "s"}, ${sets} set${sets === 1 ? "" : "s"}, ${notes} sticky note${notes === 1 ? "" : "s"}${repaired ? `, ${repaired} PDF${repaired === 1 ? "" : "s"} repaired` : ""}${skipped ? `. ${skipped} songs were already up to date` : ""}.${res.drawings ? ` ${res.drawings} pen drawings couldn't be brought over.` : ""}`);
+  return { added: added + repaired, last };
+}
+/* Songs and sets that came from an OnSong import and haven't been edited since. */
+function untouchedOnSongItems() {
+  const fresh = o => !o.deleted && (o.updatedAt || 0) - (o.createdAt || 0) < 10 * 60 * 1000;
+  return {
+    songs: [...state.songs.values()].filter(s => s.id.startsWith("os-") && fresh(s)),
+    sets: [...state.sets.values()].filter(t => t.id.startsWith("os-set-") && fresh(t)),
+  };
+}
+function removeOnSongImport() {
+  const { songs, sets } = untouchedOnSongItems();
+  for (const s of songs) { IDB.del("blobs", "pdf:" + s.id); if (s.pdf && s.pdf.assetId && assetsApi) assetsApi.delete(s.pdf.assetId).catch(() => {}); save("songs", { id: s.id, deleted: true, purged: true, deletedAt: Date.now(), title: "", createdAt: s.createdAt }); }
+  for (const t of sets) save("sets", { id: t.id, deleted: true, purged: true, deletedAt: Date.now(), name: "", items: [], createdAt: t.createdAt });
+  toast(`Removed ${songs.length} imported song${songs.length === 1 ? "" : "s"} and ${sets.length} set${sets.length === 1 ? "" : "s"}.`);
+  render();
+}
+async function reportBackup(file) {
+  const out = $("#os-out"); if (!out) return;
+  out.innerHTML = `<p class="muted">Reading the backup…</p>`;
+  try {
+    const text = await inspectBackup(file, await backupLibs());
+    out.innerHTML = `<p class="muted">Copy this and paste it into our chat. It lists the backup's file types and database layout, with a short preview of two songs and sets.</p><div class="actions"><button class="btn" id="os-copy">Copy report</button></div><textarea rows="10" readonly style="font-family:var(--font-mono);font-size:12px;white-space:pre"></textarea>`;
+    $("textarea", out).value = text;
+    $("#os-copy").onclick = () => navigator.clipboard.writeText(text).then(() => toast("Report copied."), () => { $("textarea", out).select(); toast("Select all and copy the text."); });
+  } catch (e) { console.warn(e); out.innerHTML = `<p style="color:var(--bad)">Couldn't open that file as a zip backup: ${esc(e.message || e)}</p>`; }
+}
+async function isZip(f) { try { const b = new Uint8Array(await f.slice(0, 4).arrayBuffer()); return b[0] === 0x50 && b[1] === 0x4b && b[2] === 3 && b[3] === 4; } catch { return false; } }
+
+/* ---------- model helpers ---------- */
+function newSong(o = {}) { const t = Date.now(); return Object.assign({ id: "s" + uid(), title: "", artist: "", key: "", capo: 0, tempo: "", tags: [], tabUrl: "", notes: "", chart: "", transpose: 0, view: "text", pdf: null, stickies: [], scrollSpeed: 3, createdAt: t, updatedAt: 0, deleted: false }, o); }
+function newSet(o = {}) { const t = Date.now(); return Object.assign({ id: "t" + uid(), name: "", date: "", group: "", items: [], createdAt: t, updatedAt: 0, deleted: false }, o); }
+const liveSongs = () => [...state.songs.values()].filter(s => !s.deleted);
+const liveSets = () => [...state.sets.values()].filter(s => !s.deleted);
+const allTags = () => [...new Set(liveSongs().flatMap(s => s.tags || []))].sort((a, b) => a.localeCompare(b));
+const allGroups = () => [...new Set([...liveSets().map(s => s.group), ...allTags()].filter(Boolean))].sort((a, b) => a.localeCompare(b));
+const sortTitle = (a, b) => (a.title || "").localeCompare(b.title || "", undefined, { sensitivity: "base" });
+function displayKey(s) { const k = songKey(s); return k ? transposeKey(k, s.transpose || 0) : ""; }
+
+/* ---------- tab links ---------- */
+const ugSearchUrl = s => "https://www.ultimate-guitar.com/search.php?search_type=title&value=" + encodeURIComponent([s.title, s.artist].filter(Boolean).join(" "));
+/* Pull the link out of whatever was pasted, e.g. UG's share message "Check out this tab… https://tabs.ultimate-guitar.com/…". */
+function extractUrl(text) {
+  const t = (text || "").trim();
+  const m = t.match(/https?:\/\/[^\s<>"']+/i);
+  if (m) return m[0].replace(/[).,;]+$/, "");
+  const d = t.match(/(?:^|\s)((?:[a-z0-9-]+\.)+[a-z]{2,}\/[^\s<>"']*)/i);
+  return d ? "https://" + d[1].replace(/[).,;]+$/, "") : "";
+}
+
+/* ---------- deleting songs that sets use ---------- */
+const setsContaining = id => liveSets().filter(t => t.items.some(i => i.type === "song" && i.id === id));
+const normTitle = s => (s || "").toLowerCase().replace(/\(example\)|[^a-z0-9]+/g, "");
+function twinOf(s) {
+  return liveSongs().filter(x => x.id !== s.id && normTitle(x.title) === normTitle(s.title) && (!s.artist || !x.artist || normTitle(x.artist) === normTitle(s.artist)))
+    .sort((a, b) => (b.updatedAt || 0) - (a.updatedAt || 0))[0] || null;
+}
+function deleteSong(s, msg, undoExtra) {
+  s.deleted = true; s.deletedAt = Date.now(); save("songs", s); go({ view: "songs" });
+  toast(msg || `Deleted “${s.title}”.`, { label: "Undo", run: () => { if (undoExtra) undoExtra(); s.deleted = false; save("songs", s); go({ view: "song", id: s.id }); } });
+}
+function showDeleteWarning(s) {
+  $("#delwarn")?.remove();
+  const sets = setsContaining(s.id), twin = twinOf(s);
+  const names = sets.map(t => `“${esc(t.name || "Untitled set")}”`);
+  const list = names.length > 3 ? names.slice(0, 3).join(", ") + ` and ${names.length - 3} more` : names.join(names.length === 2 ? " and " : ", ");
+  const el = document.createElement("div"); el.id = "delwarn"; el.className = "warnbar"; el.setAttribute("role", "alert");
+  el.innerHTML = `<div><b>This song is in ${sets.length} set${sets.length === 1 ? "" : "s"}:</b> ${list}.
+    ${twin ? `There's another copy of “${esc(twin.title)}”${twin.artist ? ` by ${esc(twin.artist)}` : ""}. You can put that copy into these sets instead.` : "If you delete it, those sets will skip it until you restore it from Backup › Recently deleted."}</div>
+    <div class="actions">${twin ? `<button class="btn sm primary" data-act="del-swap" data-twin="${twin.id}">Use the other copy, then delete</button>` : ""}
+    <button class="btn sm danger" data-act="del-anyway">Delete anyway</button><button class="btn sm" data-act="del-cancel">Cancel</button></div>`;
+  $(".songhead").appendChild(el);
+}
+
+/* ---------- toast & menus ---------- */
+let toastT;
+function toast(msg, action) {
+  $(".toast")?.remove(); clearTimeout(toastT);
+  const el = document.createElement("div"); el.className = "toast"; el.setAttribute("role", "status");
+  el.innerHTML = `<span>${esc(msg)}</span>`;
+  if (action) { const b = document.createElement("button"); b.textContent = action.label; b.onclick = () => { el.remove(); action.run(); }; el.appendChild(b); }
+  document.body.appendChild(el); toastT = setTimeout(() => el.remove(), action ? 7000 : 4500);
+}
+function closeMenus() { $$(".menu").forEach(m => m.remove()); }
+function openMenu(anchor, items) {
+  closeMenus();
+  const m = document.createElement("div"); m.className = "menu";
+  for (const it of items) { const b = document.createElement("button"); b.textContent = it.label; b.onclick = () => { closeMenus(); it.run(); }; m.appendChild(b); }
+  document.body.appendChild(m);
+  const r = anchor.getBoundingClientRect();
+  m.style.top = Math.min(r.bottom + 6, innerHeight - m.offsetHeight - 8) + "px";
+  m.style.left = clamp(r.left, 8, innerWidth - m.offsetWidth - 8) + "px";
+  setTimeout(() => document.addEventListener("pointerdown", function h(e) { if (!m.contains(e.target)) { m.remove(); document.removeEventListener("pointerdown", h); } }), 0);
+}
+
+/* ---------- routing ---------- */
+let sheet = null;
+function go(route) {
+  if (state.route.view === "edit") finishEdit();
+  if (sheet) { sheet.destroy(); sheet = null; }
+  stopAutoscroll(); releaseWake();
+  state.route = route; state.markup = false; closeMenus();
+  try { localStorage.setItem("stagebook.route", JSON.stringify(route.view === "perform" ? { view: "set", id: route.setId } : route)); } catch {}
+  render();
+}
+function render() {
+  const v = state.route.view;
+  if (sheet) { sheet.destroy(); sheet = null; }
+  if (v === "perform") { $("#app").innerHTML = ""; renderPerform(); return; }
+  $(".perform")?.remove();
+  const nav = (id, label, views) => `<button data-act="nav" data-to="${id}" ${views.includes(v) ? 'aria-current="page"' : ""}>${label}</button>`;
+  $("#app").innerHTML = `
+    <header class="topbar">
+      <div class="brand">Stage<span>book</span></div>
+      <nav class="nav">${nav("songs", "Songs", ["songs", "song", "edit"])}${nav("sets", "Sets", ["sets", "set"])}${nav("backup", "Backup", ["backup"])}</nav>
+      <button class="status" id="status" data-act="nav" data-to="backup"><i></i><span></span></button>
+    </header>
+    <main class="main" id="main"></main>`;
+  updateStatus(); updateAwake();
+  ({ songs: renderSongs, song: renderSong, edit: renderEdit, sets: renderSets, set: renderSet, backup: renderBackup }[v] || renderSongs)();
+}
+
+/* ---------- Songs list ---------- */
+function renderSongs() {
+  const main = $("#main");
+  const tags = allTags();
+  main.innerHTML = `<div class="wrap">
+    <div class="pagehead"><h1>Songs</h1>
+      <div class="actions">
+        <button class="btn primary" data-act="new-song">New song</button>
+        <label class="btn" for="import-files">Import PDFs, songs or OnSong backup</label>
+        <input id="import-files" type="file" multiple hidden>
+      </div></div>
+    <input id="q" type="search" placeholder="Search titles, artists, lyrics, tags" value="${esc(state.q)}" autocomplete="off">
+    ${tags.length ? `<div class="chips">${["", ...tags].map(t => `<button class="chip" data-act="tag" data-tag="${esc(t)}" aria-pressed="${state.tag === t}">${t ? esc(t) : "All"}</button>`).join("")}</div>` : ""}
+    <div id="songlist"></div></div>`;
+  $("#q").addEventListener("input", e => { state.q = e.target.value; renderSongList(); });
+  $("#import-files").addEventListener("change", e => importFiles([...e.target.files]));
+  renderSongList();
+}
+function songMatches(s, q) { if (!q) return true; const hay = [s.title, s.artist, s.chart, s.notes, ...(s.tags || [])].join("\n").toLowerCase(); return q.toLowerCase().split(/\s+/).every(w => hay.includes(w)); }
+function songRow(s, act = "open-song", extra = "") {
+  const k = displayKey(s);
+  const nSets = setsContaining(s.id).length;
+  return `<button class="row" data-act="${act}" data-id="${s.id}">
+    <span class="main-col"><span class="title">${esc(s.title || "Untitled song")}</span>
+    <span class="sub">${s.artist ? `<span>${esc(s.artist)}</span>` : ""}${(s.tags || []).map(t => `<span class="tag">${esc(t)}</span>`).join("")}${s.pdf ? '<span class="tag">PDF</span>' : ""}${s.tabUrl ? '<span class="tag">Tab link</span>' : ""}${nSets ? `<span class="tag">In ${nSets} set${nSets === 1 ? "" : "s"}</span>` : ""}</span></span>
+    ${k ? `<span class="keybadge">${esc(k)}</span>` : ""}${extra}</button>`;
+}
+function renderSongList() {
+  const el = $("#songlist"); if (!el) return;
+  const all = liveSongs();
+  const list = all.filter(s => (!state.tag || (s.tags || []).includes(state.tag)) && songMatches(s, state.q)).sort(sortTitle);
+  if (!all.length) {
+    el.innerHTML = `<div class="empty"><strong>No songs yet</strong><span>Create a chord chart, import a PDF exported from Ultimate Guitar, or bring over your whole OnSong library from an OnSong backup file.</span><div class="actions"><button class="btn primary" data-act="new-song">New song</button><label class="btn" for="import-files">Import OnSong backup</label></div></div>`;
+    return;
+  }
+  el.innerHTML = list.length ? `<ul class="list">${list.map(s => `<li>${songRow(s)}</li>`).join("")}</ul><p class="muted small">${list.length} of ${all.length} songs</p>` : `<div class="empty">No songs match “${esc(state.q)}”.</div>`;
+}
+async function importFiles(files) {
+  if (!files.length) return;
+  let n = 0, last = null, backups = 0;
+  toast(`Importing ${files.length} file${files.length > 1 ? "s" : ""}…`);
+  for (const f of files) {
+    try {
+      if (/\.(backup|zip)$/i.test(f.name) || await isZip(f)) { const r = await importOnSongBackup(f); backups++; if (r && r.added) { n += r.added; last = r.last; } continue; }
+      if (/\.pdf$/i.test(f.name) || f.type === "application/pdf") { last = await songFromPdf(f); n++; }
+      else if (/\.json$/i.test(f.name)) { await importBackup(f); }
+      else { const text = await f.text(); const p = parseSongText(text, f.name.replace(/\.[^.]+$/, "")); last = newSong(p); save("songs", last); n++; }
+    } catch (e) { console.warn(e); toast(`Couldn't read ${f.name}.`); }
+  }
+  if (n && !backups) toast(`Imported ${n} song${n > 1 ? "s" : ""}.`);
+  if (n === 1 && last && !backups) go({ view: "song", id: last.id }); else render();
+}
+
+/* ---------- Song view ---------- */
+function renderSong() {
+  const s = state.songs.get(state.route.id);
+  if (!s || s.deleted) { go({ view: "songs" }); return; }
+  const main = $("#main"); main.className = "main fill";
+  const k = songKey(s), dk = displayKey(s);
+  const p = state.prefs;
+  main.innerHTML = `
+    <div class="songhead">
+      <div class="toolbar"><button class="btn ghost sm" data-act="nav" data-to="songs">‹ Songs</button><span class="sp"></span>
+        <button class="btn sm" data-act="add-to-set">Add to set</button>
+        <button class="btn sm" data-act="edit-song">Edit</button>
+        <button class="btn sm danger" data-act="delete-song">Delete</button></div>
+      <div class="titleline"><h1>${esc(s.title || "Untitled song")}</h1>${s.artist ? `<span class="artist">${esc(s.artist)}</span>` : ""}</div>
+      <div class="toolbar">
+        ${dk ? `<span class="keybadge" title="${s.key ? "Key" : "Detected key"}">${esc(dk)}${s.transpose ? ` (from ${esc(k)})` : ""}</span>` : ""}
+        ${s.capo ? `<span class="tag">Capo ${s.capo}</span>` : ""}${s.tempo ? `<span class="tag">${esc(s.tempo)} BPM</span>` : ""}
+        ${(s.tags || []).map(t => `<span class="tag">${esc(t)}</span>`).join("")}
+      </div>
+      <div class="toolbar">
+        <span class="seg" title="Transpose"><button class="btn sm" data-act="tr" data-d="-1" aria-label="Transpose down">−</button><span class="val">${s.transpose > 0 ? "+" : ""}${s.transpose || 0}</span><button class="btn sm" data-act="tr" data-d="1" aria-label="Transpose up">+</button></span>
+        <span class="seg" title="Text size"><button class="btn sm" data-act="font" data-d="-1" aria-label="Smaller text">A−</button><button class="btn sm" data-act="font" data-d="1" aria-label="Larger text">A+</button></span>
+        <button class="btn sm" data-act="fit" aria-pressed="${p.fit}" title="Shrink long charts to fit the screen width">Fit width</button>
+        ${s.pdf ? `<span class="seg"><button class="btn sm" data-act="view" data-v="text" aria-pressed="${s.view !== "pdf"}">Chart</button><button class="btn sm" data-act="view" data-v="pdf" aria-pressed="${s.view === "pdf"}">PDF</button></span>` : ""}
+        ${s.tabUrl ? `<a class="btn sm primary" href="${esc(s.tabUrl)}" target="_blank" rel="noopener">Open tab ↗</a><button class="btn sm ghost" data-act="tab-add">Change link</button>` : `<a class="btn sm" href="${esc(ugSearchUrl(s))}" target="_blank" rel="noopener">Find tab on UG ↗</a><button class="btn sm" data-act="tab-add">Add tab link</button>`}
+        <button class="btn sm" data-act="add-sticky">Add note</button>
+        <button class="btn sm" data-act="markup" aria-pressed="${state.markup}">Markup</button>
+      </div>
+    </div>
+    ${s.notes ? `<div class="notebar">${esc(s.notes)}</div>` : ""}
+    <div class="sheetwrap" id="sheetwrap"></div>`;
+  sheet = mountSheet($("#sheetwrap"), s);
+}
+
+/* ---------- The sheet: chart or PDF, with ink and sticky notes ---------- */
+const COLORS = ["#e11d48", "#2563eb", "#16a34a", "#111827", "#f59e0b"];
+function mountSheet(host, song, opts = {}) {
+  const mode = song.view === "pdf" && song.pdf ? "pdf" : "text";
+  host.innerHTML = `<div class="sheet-scroll"><div class="sheet ${mode === "pdf" ? "pdfmode" : ""}"><div class="chart"></div><canvas class="ink"></canvas><div class="stickies"></div></div></div>`;
+  const scroller = $(".sheet-scroll", host), sh = $(".sheet", host), content = $(".chart", host), canvas = $("canvas.ink", host), stickyLayer = $(".stickies", host);
+  const ctx = canvas.getContext("2d");
+  let unit = 20, destroyed = false, cur = null, erasing = false, undo = [], raf = 0;
+  const inkDoc = () => state.ink.get(song.id) || { id: song.id, text: [], pdf: [] };
+  let strokes = (inkDoc()[mode] || []).slice();
+
+  function layoutText() {
+    const semi = song.transpose || 0;
+    const target = transposeKey(songKey(song), semi);
+    const flats = target ? keyUsesFlats(target) : false;
+    content.innerHTML = song.chart.trim() ? chartHTML(song.chart, semi, flats) : `<div class="ln cmt">This song has no chord chart yet. Tap Edit to add one.</div>`;
+    let px = state.prefs.fontPx;
+    content.style.fontSize = px + "px";
+    if (state.prefs.fit) {
+      const cs = getComputedStyle(sh);
+      const avail = scroller.clientWidth - parseFloat(cs.paddingLeft) - parseFloat(cs.paddingRight);
+      content.style.display = "inline-block";
+      const w = content.scrollWidth;
+      content.style.display = "";
+      if (w > avail && avail > 0) px = Math.max(11, Math.floor(px * avail / w * 100) / 100);
+      content.style.fontSize = px + "px";
+    }
+    unit = px;
+  }
+  async function layoutPdf() {
+    content.className = "pdfpages";
+    content.innerHTML = `<div class="pdfnote">Loading PDF…</div>`;
+    const blob = await getPdfBlob(song);
+    if (destroyed) return;
+    if (!blob) { content.innerHTML = `<div class="pdfnote">This PDF isn't on this device and couldn't be downloaded. If you're offline, connect and open the song again. If it came from OnSong, import your OnSong backup again (Backup page) and Stagebook will restore the missing PDFs without duplicating songs.</div>`; return; }
+    try {
+      const pdf = await openPdf(blob);
+      content.innerHTML = "";
+      const w = Math.max(320, content.clientWidth || sh.clientWidth);
+      const dpr = Math.min(window.devicePixelRatio || 1, 2.5);
+      for (let i = 1; i <= pdf.numPages; i++) {
+        const page = await pdf.getPage(i); if (destroyed) return;
+        const base = page.getViewport({ scale: 1 });
+        const vp = page.getViewport({ scale: (w / base.width) * dpr });
+        const c = document.createElement("canvas"); c.width = vp.width; c.height = vp.height;
+        content.appendChild(c);
+        await page.render({ canvasContext: c.getContext("2d"), viewport: vp }).promise;
+        sizeCanvas();
+      }
+    } catch (e) { console.warn(e); content.innerHTML = `<div class="pdfnote">Couldn't open this PDF. ${esc(e.message || "")}</div>`; }
+  }
+  function updateUnit() { if (mode === "pdf") unit = sh.clientWidth || 800; }
+  function sizeCanvas() {
+    updateUnit();
+    const dpr = window.devicePixelRatio || 1;
+    const w = sh.scrollWidth, h = sh.scrollHeight;
+    canvas.style.width = w + "px"; canvas.style.height = h + "px";
+    canvas.width = Math.round(w * dpr); canvas.height = Math.round(h * dpr);
+    draw(); placeStickies();
+  }
+  const origin = () => { const cs = getComputedStyle(sh); return { x: parseFloat(cs.paddingLeft) || 0, y: parseFloat(cs.paddingTop) || 0 }; };
+  function draw() {
+    const dpr = window.devicePixelRatio || 1; const o = origin();
+    ctx.setTransform(1, 0, 0, 1, 0, 0); ctx.clearRect(0, 0, canvas.width, canvas.height);
+    ctx.setTransform(dpr * unit, 0, 0, dpr * unit, dpr * o.x, dpr * o.y);
+    ctx.lineCap = "round"; ctx.lineJoin = "round";
+    const all = cur && !erasing ? strokes.concat([cur]) : strokes;
+    for (const s of all) {
+      const p = s.p; if (p.length < 2) continue;
+      ctx.globalAlpha = s.t === "h" ? 0.32 : 1; ctx.strokeStyle = s.c; ctx.lineWidth = s.w;
+      ctx.beginPath(); ctx.moveTo(p[0], p[1]);
+      if (p.length === 2) ctx.lineTo(p[0] + 0.001, p[1]);
+      for (let i = 2; i < p.length; i += 2) ctx.lineTo(p[i], p[i + 1]);
+      ctx.stroke();
+    }
+    ctx.globalAlpha = 1;
+  }
+  const reqDraw = () => { if (!raf) raf = requestAnimationFrame(() => { raf = 0; draw(); }); };
+  function pt(e) { const r = sh.getBoundingClientRect(); const o = origin(); return [(e.clientX - r.left - o.x) / unit, (e.clientY - r.top - o.y) / unit]; }
+  const R = v => Math.round(v * (mode === "pdf" ? 10000 : 100)) / (mode === "pdf" ? 10000 : 100);
+  const widths = () => mode === "pdf" ? { p: 0.0026, h: 0.02, e: 0.014 } : { p: 0.11, h: 0.95, e: 0.6 };
+  function canDraw(e) {
+    if (e.pointerType === "pen") return state.prefs.pencil || state.markup;
+    if (!state.markup) return false;
+    return e.pointerType === "mouse" || state.prefs.fingerDraw;
+  }
+  function eraseAt(x, y) {
+    const r = widths().e; const before = strokes.length;
+    strokes = strokes.filter(s => { for (let i = 0; i < s.p.length; i += 2) if (Math.hypot(s.p[i] - x, s.p[i + 1] - y) < r + s.w / 2) return false; return true; });
+    if (strokes.length !== before) reqDraw();
+  }
+  function onDown(e) {
+    if (!canDraw(e) || e.target.closest(".sticky") || e.target.closest("a")) return;
+    e.preventDefault();
+    try { sh.setPointerCapture(e.pointerId); } catch {}
+    if (!state.markup && e.pointerType === "pen") { state.markup = true; showTray(); }
+    undo.push(strokes.slice()); if (undo.length > 50) undo.shift();
+    erasing = state.prefs.tool === "e" || e.button === 5 || (e.buttons & 32) === 32;
+    const w = widths();
+    cur = { t: state.prefs.tool === "h" ? "h" : "p", c: state.prefs.color, w: state.prefs.tool === "h" ? w.h : w.p, p: [] };
+    addPts(e);
+  }
+  function addPts(e) {
+    const evs = e.getCoalescedEvents ? e.getCoalescedEvents() : [e];
+    for (const ev of (evs.length ? evs : [e])) {
+      const [x, y] = pt(ev);
+      if (erasing) { eraseAt(x, y); continue; }
+      const p = cur.p, n = p.length;
+      if (n && Math.hypot(p[n - 2] - x, p[n - 1] - y) * unit < 1.2) continue;
+      p.push(R(x), R(y));
+    }
+    if (!erasing) reqDraw();
+  }
+  function onMove(e) { if (cur) { e.preventDefault(); addPts(e); } }
+  function onUp() {
+    if (!cur) return;
+    if (!erasing && cur.p.length >= 2) strokes.push(cur);
+    cur = null; erasing = false; draw(); saveInk(); updateTray();
+  }
+  function saveInk() {
+    debounce("ink-" + song.id, 900, () => {
+      const d = Object.assign({}, inkDoc()); d.text = (d.text || []).slice(); d.pdf = (d.pdf || []).slice(); d[mode] = strokes.slice(); d.id = song.id;
+      save("ink", d);
+    });
+  }
+  function onTouch(e) {
+    for (const t of e.changedTouches) if (t.touchType === "stylus" && (state.prefs.pencil || state.markup)) { e.preventDefault(); return; }
+  }
+  sh.addEventListener("pointerdown", onDown);
+  sh.addEventListener("pointermove", onMove);
+  sh.addEventListener("pointerup", onUp);
+  sh.addEventListener("pointercancel", onUp);
+  sh.addEventListener("touchstart", onTouch, { passive: false });
+  sh.addEventListener("touchmove", onTouch, { passive: false });
+
+  /* sticky notes */
+  function stickies() { return (song.stickies || []).filter(n => (n.m || "text") === mode); }
+  /* Notes imported from OnSong sit on a PDF page by fraction of that page; others by sheet units. */
+  function stickyPos(n, o) {
+    if (mode === "pdf" && n.page != null && n.px != null) {
+      const pages = content.querySelectorAll("canvas"); const cv = pages[Math.min(n.page, pages.length - 1)];
+      if (!cv || !cv.clientHeight) return null;
+      return { left: cv.offsetLeft + n.px * cv.clientWidth, top: cv.offsetTop + n.py * cv.clientHeight };
+    }
+    return { left: o.x + n.x * unit, top: o.y + n.y * unit };
+  }
+  function placeStickies() {
+    stickyLayer.innerHTML = "";
+    const o = origin();
+    for (const n of stickies()) {
+      const pos = stickyPos(n, o); if (!pos) continue;
+      const el = document.createElement("div"); el.className = "sticky"; el.dataset.id = n.id;
+      el.style.left = pos.left + "px"; el.style.top = pos.top + "px";
+      el.innerHTML = `<div class="grip"><span>Note</span><button aria-label="Delete note">×</button></div><textarea rows="3" aria-label="Note text"></textarea>`;
+      const ta = $("textarea", el); ta.value = n.text || "";
+      const fit = () => { ta.style.height = "auto"; ta.style.height = ta.scrollHeight + "px"; };
+      ta.addEventListener("input", () => { n.text = ta.value; fit(); debounce("song-" + song.id, 700, () => save("songs", song)); });
+      $(".grip button", el).addEventListener("click", () => {
+        const before = song.stickies.slice();
+        song.stickies = song.stickies.filter(x => x.id !== n.id); save("songs", song); placeStickies();
+        toast("Note deleted.", { label: "Undo", run: () => { song.stickies = before; save("songs", song); placeStickies(); } });
+      });
+      const grip = $(".grip", el);
+      grip.addEventListener("pointerdown", e => {
+        if (e.target.tagName === "BUTTON") return;
+        e.preventDefault(); grip.setPointerCapture(e.pointerId);
+        const sx = e.clientX, sy = e.clientY, ox = (parseFloat(el.style.left) - o.x) / unit, oy = (parseFloat(el.style.top) - o.y) / unit;
+        const mv = ev => { delete n.page; delete n.px; delete n.py; n.x = R(Math.max(0, ox + (ev.clientX - sx) / unit)); n.y = R(Math.max(0, oy + (ev.clientY - sy) / unit)); el.style.left = o.x + n.x * unit + "px"; el.style.top = o.y + n.y * unit + "px"; };
+        const up = () => { grip.removeEventListener("pointermove", mv); grip.removeEventListener("pointerup", up); grip.removeEventListener("pointercancel", up); save("songs", song); };
+        grip.addEventListener("pointermove", mv); grip.addEventListener("pointerup", up); grip.addEventListener("pointercancel", up);
+      });
+      stickyLayer.appendChild(el); requestAnimationFrame(fit);
+    }
+  }
+  function addSticky() {
+    const o = origin();
+    const x = R(Math.max(0, (scroller.scrollLeft + scroller.clientWidth - o.x - 16) / unit - (mode === "pdf" ? 0.25 : 16)));
+    const y = R(Math.max(0, (scroller.scrollTop + 8) / unit));
+    song.stickies = (song.stickies || []).concat([{ id: uid(), x, y, text: "", m: mode }]);
+    save("songs", song); placeStickies();
+    const last = stickyLayer.lastElementChild; if (last) $("textarea", last).focus();
+  }
+
+  /* markup tray */
+  let tray = null;
+  function showTray() {
+    if (tray) { updateTray(); return; }
+    tray = document.createElement("div"); tray.className = "tray";
+    host.appendChild(tray); updateTray();
+    tray.addEventListener("click", e => {
+      const b = e.target.closest("button"); if (!b) return;
+      const a = b.dataset.t;
+      if (a === "tool") state.prefs.tool = b.dataset.v;
+      else if (a === "color") { state.prefs.color = b.dataset.v; if (state.prefs.tool === "e") state.prefs.tool = "p"; }
+      else if (a === "undo") { if (undo.length) { strokes = undo.pop(); draw(); saveInk(); } }
+      else if (a === "clear") { if (strokes.length) { undo.push(strokes.slice()); strokes = []; draw(); saveInk(); toast("Markup cleared.", { label: "Undo", run: () => { strokes = undo.pop() || []; draw(); saveInk(); } }); } }
+      else if (a === "finger") state.prefs.fingerDraw = !state.prefs.fingerDraw;
+      else if (a === "done") { state.markup = false; hideTray(); $$('[data-act="markup"]').forEach(x => x.setAttribute("aria-pressed", "false")); savePrefs(); return; }
+      savePrefs(); updateTray();
+    });
+  }
+  function updateTray() {
+    sh.classList.toggle("drawing", state.markup && state.prefs.fingerDraw);
+    $$('[data-act="markup"]').forEach(x => x.setAttribute("aria-pressed", String(state.markup)));
+    if (!tray) return;
+    const p = state.prefs;
+    tray.innerHTML = `
+      <button class="btn sm" data-t="tool" data-v="p" aria-pressed="${p.tool === "p"}">Pen</button>
+      <button class="btn sm" data-t="tool" data-v="h" aria-pressed="${p.tool === "h"}">Highlight</button>
+      <button class="btn sm" data-t="tool" data-v="e" aria-pressed="${p.tool === "e"}">Erase</button>
+      ${COLORS.map(c => `<button class="swatch" data-t="color" data-v="${c}" style="background:${c}" aria-label="Color ${c}" aria-pressed="${p.color === c && p.tool !== "e"}"></button>`).join("")}
+      <button class="btn sm" data-t="undo" ${undo.length ? "" : "disabled"}>Undo</button>
+      <button class="btn sm" data-t="clear">Clear</button>
+      <button class="btn sm" data-t="finger" aria-pressed="${p.fingerDraw}" title="When off, only Apple Pencil draws and your finger scrolls">Finger draws</button>
+      <button class="btn sm primary" data-t="done">Done</button>`;
+  }
+  function hideTray() { tray?.remove(); tray = null; sh.classList.remove("drawing"); }
+
+  const ro = new ResizeObserver(() => { if (mode === "text" && state.prefs.fit) layoutText(); sizeCanvas(); });
+  if (mode === "text") layoutText(); else layoutPdf();
+  sizeCanvas(); ro.observe(sh); ro.observe(scroller);
+  if (state.markup) showTray();
+
+  return {
+    scroller, addSticky, showTray, hideTray, mode,
+    refresh() { if (mode === "text") layoutText(); strokes = (inkDoc()[mode] || []).slice(); sizeCanvas(); },
+    destroy() { destroyed = true; ro.disconnect(); cancelAnimationFrame(raf); if (cur) onUp(); hideTray(); },
+  };
+}
+
+/* ---------- Song editor ---------- */
+let editState = null;
+function renderEdit() {
+  const s = state.songs.get(state.route.id);
+  if (!s) { go({ view: "songs" }); return; }
+  editState = { id: s.id, autoAt: -1, closeAt: -1 };
+  const main = $("#main");
+  const tagsVal = (s.tags || []).join(", ");
+  main.innerHTML = `<div class="wrap editor">
+    <div class="pagehead"><h1>${s.title ? "Edit song" : "New song"}</h1>
+      <div class="actions"><span class="savedline" id="savedline">Changes save as you type</span><button class="btn primary" data-act="done-edit">Done</button></div></div>
+    <div class="grid">
+      <label class="field">Title<input id="f-title" type="text" value="${esc(s.title)}" placeholder="Song title" autocomplete="off"></label>
+      <label class="field">Artist<input id="f-artist" type="text" value="${esc(s.artist)}" placeholder="Artist" autocomplete="off"></label>
+    </div>
+    <div class="grid">
+      <label class="field">Key<select id="f-key"><option value="">Auto-detect</option>${ALL_KEYS.map(k => `<option ${s.key === k ? "selected" : ""}>${k}</option>`).join("")}</select></label>
+      <label class="field">Capo<input id="f-capo" type="number" min="0" max="12" inputmode="numeric" value="${s.capo || ""}" placeholder="None"></label>
+      <label class="field">Tempo (BPM)<input id="f-tempo" type="number" min="0" max="400" inputmode="numeric" value="${esc(s.tempo)}" placeholder="—"></label>
+      <label class="field">Tags<input id="f-tags" type="text" value="${esc(tagsVal)}" placeholder="Band, SoR Tuesday" list="taglist" autocomplete="off"></label>
+      <datalist id="taglist">${allTags().map(t => `<option value="${esc(t)}">`).join("")}</datalist>
+    </div>
+    <div class="grid" style="grid-template-columns: minmax(0,1fr) auto; align-items: end;">
+      <label class="field">Tab link (Ultimate Guitar or any website)<input id="f-tab" type="url" value="${esc(s.tabUrl)}" placeholder="https://tabs.ultimate-guitar.com/tab/…" autocomplete="off"></label>
+      <a class="btn" id="ug-search" target="_blank" rel="noopener">Find on Ultimate Guitar ↗</a>
+    </div>
+    <label class="field">Notes (shown above the chart)<textarea id="f-notes" rows="2" placeholder="Count-in, who starts, ending cue…">${esc(s.notes)}</textarea></label>
+    <div class="pdfbox">${s.pdf ? `<span><b>PDF:</b> ${esc(s.pdf.name || "attached")}</span><button class="btn sm" data-act="pdf-text">Pull chart text from PDF</button><button class="btn sm danger" data-act="pdf-remove">Remove PDF</button>` : `<span class="muted">No PDF attached.</span>`}
+      <label class="btn sm" for="f-pdf">${s.pdf ? "Replace PDF" : "Attach a PDF"}</label><input id="f-pdf" type="file" accept=".pdf,application/pdf" hidden></div>
+    <div class="palette" id="palette"></div>
+    <label class="field">Chord chart<textarea id="f-chart" class="chartedit" wrap="off" spellcheck="false" autocapitalize="off" autocorrect="off" placeholder="Verse:\nG         C         G\nThere is a house in New Orleans\n\nType chords on the line above the lyrics, or inline like [G]There is a [C]house.">${esc(s.chart)}</textarea></label>
+  </div>`;
+  const upd = (field, fn) => $(field).addEventListener("input", e => { fn(e.target.value); queueEditSave(); });
+  upd("#f-title", v => s.title = v);
+  upd("#f-artist", v => { s.artist = v; ugLink(); });
+  $("#f-title").addEventListener("input", ugLink);
+  $("#f-key").addEventListener("change", e => { s.key = e.target.value; queueEditSave(); renderPalette(); });
+  upd("#f-capo", v => s.capo = clamp(parseInt(v, 10) || 0, 0, 12));
+  upd("#f-tempo", v => s.tempo = v.replace(/\D+/g, ""));
+  upd("#f-tags", v => s.tags = [...new Set(v.split(",").map(t => t.trim()).filter(Boolean))]);
+  upd("#f-tab", v => s.tabUrl = extractUrl(v) || v.trim());
+  $("#f-tab").addEventListener("blur", e => { e.target.value = s.tabUrl; });
+  upd("#f-notes", v => s.notes = v);
+  upd("#f-chart", v => { s.chart = v; editState.autoAt = -1; editState.closeAt = -1; debounce("palette", 600, renderPalette); });
+  $("#f-pdf").addEventListener("change", async e => {
+    const f = e.target.files[0]; if (!f) return;
+    s.pdf = { name: f.name, size: f.size, local: true }; const b = await putPdf(s.id, f); save("songs", s);
+    toast("PDF attached."); uploadPdf(s, b); render();
+  });
+  function ugLink() { $("#ug-search").href = ugSearchUrl(s); }
+  ugLink(); renderPalette();
+  if (!s.title) $("#f-title").focus();
+}
+function queueEditSave() {
+  const sl = $("#savedline"); if (sl) sl.textContent = "Saving…";
+  debounce("edit-save", 500, () => { const s = state.songs.get(editState?.id); if (s) save("songs", s); const sl2 = $("#savedline"); if (sl2) sl2.textContent = "Saved"; });
+}
+function finishEdit() {
+  const s = editState && state.songs.get(editState.id);
+  clearTimeout(debounceMap.get("edit-save")); debounceMap.delete("edit-save");
+  if (s) {
+    if (!s.title.trim() && !s.chart.trim() && !s.pdf) { state.songs.delete(s.id); IDB.del("docs", "songs/" + s.id); if (cloudDb) cloudDb.doc("songs/" + s.id).delete().catch(() => {}); state.pending.delete("songs/" + s.id); }
+    else { if (!s.title.trim()) s.title = "Untitled song"; save("songs", s); }
+  }
+  editState = null;
+}
+function renderPalette() {
+  const el = $("#palette"); const s = editState && state.songs.get(editState.id); if (!el || !s) return;
+  const k = songKey(s);
+  const freq = {}; for (const c of chordsIn(s.chart)) freq[c] = (freq[c] || 0) + 1;
+  const used = Object.entries(freq).sort((a, b) => b[1] - a[1]).map(x => x[0]).slice(0, 10);
+  const pk = (v, cls = "c", kind = "chord") => `<button class="pk ${cls}" data-pk="${kind}" data-v="${esc(v)}">${esc(v)}</button>`;
+  el.innerHTML = `
+    <div class="prow"><span class="lbl">${k ? "Key of " + esc(k) : "Key"}</span>${k ? diatonic(k).map(c => pk(c)).join("") : '<span class="muted small">Type a few chords and the key appears here.</span>'}</div>
+    ${used.length ? `<div class="prow"><span class="lbl">In song</span>${used.map(c => pk(c)).join("")}</div>` : ""}
+    <div class="prow"><span class="lbl">Build</span>${["C", "D", "E", "F", "G", "A", "B"].map(c => pk(c)).join("")}${["#", "b", "m", "7", "maj7", "m7", "sus2", "sus4", "add9", "dim", "/"].map(m => pk(m, "", "mod")).join("")}${pk("|", "", "sym")}${pk("N.C.", "", "chord")}${pk("x2", "", "sym")}</div>
+    <div class="prow"><span class="lbl">Sections</span>${["Intro", "Verse", "Pre-Chorus", "Chorus", "Bridge", "Solo", "Outro"].map(c => pk(c, "s", "sec")).join("")}
+      <button class="pk s" data-pk="tab" title="Build guitar or bass tab by tapping frets">+ Tab</button>
+      <button class="pk s" data-pk="inline" aria-pressed="${state.prefs.inline}" style="${state.prefs.inline ? "background:var(--fg);color:var(--bg)" : ""}" title="Insert chords as [G] inside the lyric line">[ ] inline</button></div>`;
+}
+function paletteInsert(kind, v) {
+  const ta = $("#f-chart"); if (!ta) return;
+  if (kind === "inline") { state.prefs.inline = !state.prefs.inline; savePrefs(); renderPalette(); return; }
+  if (kind === "tab") { openTabBuilder(); return; }
+  ta.focus();
+  let a = ta.selectionStart, b = ta.selectionEnd; const val = ta.value; const es = editState;
+  let text, cursorAfter;
+  if (kind === "chord") {
+    if (state.prefs.inline) { text = "[" + v + "]"; cursorAfter = text.length; ta.setRangeText(text, a, b, "end"); es.closeAt = a + text.length; es.autoAt = -1; }
+    else { text = v + " "; ta.setRangeText(text, a, b, "end"); es.autoAt = a + text.length; es.closeAt = -1; }
+  } else if (kind === "mod") {
+    if (es.autoAt === a && a === b && val[a - 1] === " ") { ta.setRangeText(v + " ", a - 1, a, "end"); es.autoAt = a + v.length; }
+    else if (es.closeAt === a && a === b && val[a - 1] === "]") { ta.setRangeText(v + "]", a - 1, a, "end"); es.closeAt = a + v.length; }
+    else { ta.setRangeText(v, a, b, "end"); }
+  } else if (kind === "sym") { ta.setRangeText(v + " ", a, b, "end"); es.autoAt = -1; }
+  else if (kind === "sec") {
+    const lineStart = val.lastIndexOf("\n", a - 1) + 1;
+    const pre = a > lineStart ? "\n" : ""; const pre2 = lineStart > 1 && val[lineStart - 2] !== "\n" ? "\n" : "";
+    ta.setRangeText((pre ? pre + "\n" : pre2) + v + ":\n", a, b, "end"); es.autoAt = -1;
+  }
+  const s = state.songs.get(es.id); const keepAuto = es.autoAt, keepClose = es.closeAt;
+  s.chart = ta.value; queueEditSave(); debounce("palette", 600, renderPalette);
+  es.autoAt = keepAuto; es.closeAt = keepClose;
+}
+document.addEventListener("pointerdown", e => { if (e.target.closest(".pk")) e.preventDefault(); });
+
+/* ---------- Tab builder: tap a string position, tap a fret ---------- */
+const TAB_LINE_RE = /^\s*([A-Ga-g][#b]?)\s*\|(.*)$/;
+const TUNINGS = { guitar: "E A D G B e", bass: "E A D G" };
+function formatTab(tb) {
+  const lw = Math.max(...tb.labels.map(l => l.length));
+  return tb.labels.map((lab, si) => {
+    let s = lab.padEnd(lw, " ") + "|-";
+    for (const col of tb.cols) {
+      if (col.bar) { s += "|-"; continue; }
+      const w = Math.max(1, ...col.cells.map(x => x.length));
+      s += (col.cells[si] || "").padEnd(w, "-") + "-";
+    }
+    return s.endsWith("|-") ? s.slice(0, -1) : s + "|";
+  });
+}
+function parseTab(lines) {
+  const rows = lines.map(l => { const m = l.match(TAB_LINE_RE); return { lab: m[1], body: m[2].replace(/\|?\s*$/, "") }; });
+  const n = rows.length, len = Math.max(0, ...rows.map(r => r.body.length));
+  const B = rows.map(r => r.body.padEnd(len, "-"));
+  const gap = c => c === "-" || c === "|" || c === " ";
+  const cols = []; let p = 0;
+  while (p < len) {
+    const chars = B.map(b => b[p]);
+    if (chars.every(c => c === "-" || c === " ")) { p++; continue; }
+    if (chars.every(c => c === "|")) { cols.push({ bar: true, cells: Array(n).fill("") }); p++; continue; }
+    let e = p + 1, grew = true;
+    while (grew) {
+      grew = false;
+      for (const b of B) for (let i = p; i < e; i++) if (!gap(b[i])) { let j = i; while (j < len && !gap(b[j])) j++; if (j > e) { e = j; grew = true; } }
+    }
+    cols.push({ bar: false, cells: B.map(b => b.slice(p, e).replace(/[-| ]/g, "")) });
+    p = e;
+  }
+  return { labels: rows.map(r => r.lab), cols };
+}
+const blankCols = (n, strings) => Array.from({ length: n }, () => ({ bar: false, cells: Array(strings).fill("") }));
+/* Tab block (consecutive tab lines) around a line index, or null. */
+function tabBlockAt(lines, li) {
+  if (li < 0 || li >= lines.length || !TAB_LINE_RE.test(lines[li]) || !isTabLine(lines[li])) return null;
+  let a = li, b = li;
+  while (a > 0 && TAB_LINE_RE.test(lines[a - 1]) && isTabLine(lines[a - 1])) a--;
+  while (b < lines.length - 1 && TAB_LINE_RE.test(lines[b + 1]) && isTabLine(lines[b + 1])) b++;
+  return b - a >= 1 ? { a, b } : null;
+}
+
+let tb = null;
+function openTabBuilder() {
+  const ta = $("#f-chart"); if (!ta) return;
+  const val = ta.value, pos = ta.selectionStart;
+  const lines = val.split("\n"); const li = val.slice(0, pos).split("\n").length - 1;
+  const blk = tabBlockAt(lines, li);
+  if (blk) {
+    const parsed = parseTab(lines.slice(blk.a, blk.b + 1));
+    tb = Object.assign(parsed, { block: blk, sel: { c: 0, s: 0 }, move: "beat" });
+    if (!tb.cols.length) tb.cols = blankCols(16, tb.labels.length);
+  } else {
+    const kind = state.prefs.tabKind || "guitar";
+    const labels = TUNINGS[kind].split(" ").reverse();
+    tb = { labels, cols: blankCols(16, labels.length), block: null, insertAt: pos, sel: { c: 0, s: 0 }, move: "beat" };
+  }
+  const el = document.createElement("div"); el.className = "tabsheet"; el.id = "tabsheet";
+  el.innerHTML = `<div class="tabpanel" role="dialog" aria-label="Tab builder"></div>`;
+  document.body.appendChild(el);
+  el.addEventListener("click", onTabClick);
+  el.addEventListener("pointerdown", e => { if (e.target.closest("button")) e.preventDefault(); });
+  renderTabBuilder();
+}
+function closeTabBuilder() { $("#tabsheet")?.remove(); tb = null; }
+function tuningString() { return tb.labels.slice().reverse().join(" "); }
+function setTuning(str) {
+  const labels = str.trim().split(/\s+/).filter(t => /^[A-Ga-g][#b]?$/.test(t)).reverse();
+  if (labels.length < 3 || labels.length > 8) return false;
+  const n = labels.length, off = tb.labels.length - n;
+  /* Strings line up from the lowest one, so guitar E A D G become bass E A D G. */
+  tb.cols = tb.cols.map(c => ({ bar: c.bar, cells: Array.from({ length: n }, (_, i) => c.cells[i + off] || "") }));
+  tb.labels = labels; tb.sel.s = Math.min(tb.sel.s, n - 1);
+  return true;
+}
+function renderTabBuilder() {
+  const panel = $("#tabsheet .tabpanel"); if (!panel || !tb) return;
+  const n = tb.labels.length, kind = n === 4 ? "bass" : n === 6 ? "guitar" : "";
+  const keepScroll = $(".tabgrid", panel)?.scrollLeft || 0;
+  const cell = (c, s) => {
+    const col = tb.cols[c]; const sel = tb.sel.c === c && tb.sel.s === s;
+    if (col.bar) return `<button class="tcell bar ${tb.sel.c === c ? "selcol" : ""}" data-t="cell" data-c="${c}" data-s="${s}" aria-label="Bar line"></button>`;
+    const v = col.cells[s];
+    return `<button class="tcell ${sel ? "sel" : ""} ${tb.sel.c === c ? "selcol" : ""}" data-t="cell" data-c="${c}" data-s="${s}" aria-label="String ${tb.labels[s]}, position ${c + 1}${v ? ", " + v : ""}">${v ? `<span>${esc(v)}</span>` : ""}</button>`;
+  };
+  let grid = "";
+  for (let s = 0; s < n; s++) { grid += `<div class="lab">${esc(tb.labels[s])}</div>`; for (let c = 0; c < tb.cols.length; c++) grid += cell(c, s); }
+  const frets = Array.from({ length: 25 }, (_, i) => `<button class="pk" data-t="fret" data-v="${i}">${i}</button>`).join("");
+  const techs = [["h", "hammer-on"], ["p", "pull-off"], ["/", "slide up"], ["\\", "slide down"], ["b", "bend"], ["r", "release"], ["~", "vibrato"], ["x", "muted"], ["(", "ghost note open"], [")", "ghost note close"]];
+  panel.innerHTML = `
+    <div class="toolbar"><h2 style="font-size:24px">Tab builder</h2><span class="sp"></span>
+      <span class="seg"><button class="btn sm" data-t="kind" data-v="guitar" aria-pressed="${kind === "guitar"}">Guitar</button><button class="btn sm" data-t="kind" data-v="bass" aria-pressed="${kind === "bass"}">Bass</button></span>
+      <label class="field" style="flex-direction:row;align-items:center;gap:6px">Tuning<input id="tb-tuning" type="text" value="${esc(tuningString())}" style="width:12em;min-height:36px;padding:4px 8px" autocomplete="off" autocapitalize="off" aria-label="Tuning, low string to high"></label></div>
+    <p class="muted small" style="margin:0">Tap a spot on a string, then tap a fret number. ${tb.move === "beat" ? "After each number it moves to the next beat." : "After each number it moves to the next string, for chords."}</p>
+    <div class="tabgrid" style="grid-template-columns: max-content repeat(${tb.cols.length}, minmax(40px, max-content))">${grid}</div>
+    <div class="toolbar">
+      <button class="btn sm" data-t="nav" data-v="-1" aria-label="Previous beat">◀</button><button class="btn sm" data-t="nav" data-v="1" aria-label="Next beat">▶</button>
+      <button class="btn sm" data-t="move" aria-pressed="${tb.move === "chord"}" title="When on, entering a number moves down to the next string so you can stack a chord">Chord mode</button>
+      <button class="btn sm" data-t="bar">Add bar line</button>
+      <button class="btn sm" data-t="space">Insert beat</button>
+      <button class="btn sm" data-t="delcol">Delete beat</button>
+      <button class="btn sm" data-t="more">+8 beats</button>
+    </div>
+    <div class="tpad">${frets}</div>
+    <div class="tpad">${techs.map(([t, label]) => `<button class="pk s" data-t="tech" data-v="${esc(t)}" title="${label}">${esc(t)}</button>`).join("")}<button class="pk s" data-t="clear">Clear</button></div>
+    <pre class="tabpreview" aria-label="Preview">${esc(formatTab(tb).join("\n"))}</pre>
+    <div class="actions" style="justify-content:flex-end"><button class="btn" data-t="cancel">Cancel</button><button class="btn primary" data-t="insert">${tb.block ? "Update tab" : "Insert into chart"}</button></div>`;
+  const g = $(".tabgrid", panel); g.scrollLeft = keepScroll;
+  const selEl = $(".tcell.sel", panel) || $(`.tcell[data-c="${tb.sel.c}"]`, panel);
+  if (selEl) { const gr = g.getBoundingClientRect(), r = selEl.getBoundingClientRect(); if (r.right > gr.right - 8 || r.left < gr.left + 40) g.scrollLeft += r.left - gr.left - gr.width / 2; }
+  $("#tb-tuning", panel).addEventListener("change", e => { if (!setTuning(e.target.value)) toast("Enter 3 to 8 notes, low string first, like E A D G B e."); renderTabBuilder(); });
+}
+function tbAdvance() {
+  if (tb.move === "chord") { if (tb.sel.s < tb.labels.length - 1) tb.sel.s++; else { tb.sel.s = 0; tb.sel.c++; } }
+  else tb.sel.c++;
+  while (tb.sel.c < tb.cols.length && tb.cols[tb.sel.c].bar) tb.sel.c++;
+  if (tb.sel.c >= tb.cols.length) tb.cols.push(...blankCols(8, tb.labels.length));
+}
+function onTabClick(e) {
+  if (e.target.id === "tabsheet") return;
+  const b = e.target.closest("[data-t]"); if (!b || !tb) return;
+  const t = b.dataset.t, n = tb.labels.length, col = tb.cols[tb.sel.c];
+  switch (t) {
+    case "cell": tb.sel = { c: +b.dataset.c, s: +b.dataset.s }; tb.last = null; break;
+    case "fret": {
+      if (col.bar) break;
+      const cur = col.cells[tb.sel.s] || "";
+      col.cells[tb.sel.s] = /[hp\/\\br(]$/.test(cur) ? cur + b.dataset.v : b.dataset.v;
+      tb.last = { c: tb.sel.c, s: tb.sel.s };
+      tbAdvance(); break;
+    }
+    case "tech": {
+      if (col.bar) break;
+      const v = b.dataset.v;
+      /* "5", then "h", then "7" should make one "5h7": a technique right after a fret goes back onto that fret's spot. */
+      if (v !== "x" && v !== "(" && !(col.cells[tb.sel.s]) && tb.last) { tb.sel = { c: tb.last.c, s: tb.last.s }; }
+      const cell = tb.cols[tb.sel.c], cur = cell.cells[tb.sel.s] || "";
+      tb.last = null;
+      if (v === "x" && !cur) { cell.cells[tb.sel.s] = "x"; tbAdvance(); break; }
+      if (v === "(") { cell.cells[tb.sel.s] = "(" + cur; break; }
+      cell.cells[tb.sel.s] = cur + v;
+      break;
+    }
+    case "clear": if (col.bar) tb.cols.splice(tb.sel.c, 1); else col.cells[tb.sel.s] = ""; if (!tb.cols.length) tb.cols = blankCols(8, n); tb.sel.c = Math.min(tb.sel.c, tb.cols.length - 1); break;
+    case "nav": tb.sel.c = clamp(tb.sel.c + +b.dataset.v, 0, tb.cols.length - 1); break;
+    case "move": tb.move = tb.move === "chord" ? "beat" : "chord"; break;
+    case "bar": tb.cols.splice(tb.sel.c + 1, 0, { bar: true, cells: Array(n).fill("") }); tb.sel.c += 2; if (tb.sel.c >= tb.cols.length) tb.cols.push(...blankCols(4, n)); break;
+    case "space": tb.cols.splice(tb.sel.c, 0, ...blankCols(1, n)); break;
+    case "delcol": tb.cols.splice(tb.sel.c, 1); if (!tb.cols.length) tb.cols = blankCols(8, n); tb.sel.c = Math.min(tb.sel.c, tb.cols.length - 1); break;
+    case "more": tb.cols.push(...blankCols(8, n)); break;
+    case "kind": {
+      const before = tuningString(); setTuning(TUNINGS[b.dataset.v]); state.prefs.tabKind = b.dataset.v; savePrefs();
+      if (before !== tuningString()) toast(b.dataset.v === "bass" ? "Switched to 4-string bass." : "Switched to 6-string guitar.");
+      break;
+    }
+    case "cancel": closeTabBuilder(); return;
+    case "insert": insertTab(); return;
+  }
+  renderTabBuilder();
+}
+function insertTab() {
+  const ta = $("#f-chart"); if (!ta || !tb) { closeTabBuilder(); return; }
+  while (tb.cols.length && !tb.cols[tb.cols.length - 1].bar && tb.cols[tb.cols.length - 1].cells.every(x => !x) && tb.cols.length > 1) tb.cols.pop();
+  const text = formatTab(tb).join("\n");
+  const val = ta.value;
+  if (tb.block) {
+    const lines = val.split("\n");
+    lines.splice(tb.block.a, tb.block.b - tb.block.a + 1, ...text.split("\n"));
+    ta.value = lines.join("\n");
+  } else {
+    let at = clamp(tb.insertAt, 0, val.length);
+    const lineEnd = val.indexOf("\n", at); const lineStart = val.lastIndexOf("\n", at - 1) + 1;
+    if (val.slice(lineStart, lineEnd < 0 ? val.length : lineEnd).trim()) at = lineEnd < 0 ? val.length : lineEnd;
+    else at = lineStart;
+    const before = val.slice(0, at), after = val.slice(at);
+    const lead = before && !before.endsWith("\n") ? "\n" : "";
+    const trail = after.startsWith("\n") ? "" : "\n";
+    ta.value = before + lead + text + trail + after;
+  }
+  const s = state.songs.get(editState.id); s.chart = ta.value; queueEditSave(); renderPalette();
+  closeTabBuilder(); toast(tb && tb.block ? "Tab updated." : "Tab added to the chart.");
+}
+
+/* ---------- Sets ---------- */
+function renderSets() {
+  const main = $("#main");
+  const sets = liveSets();
+  const groups = [...new Set(sets.map(s => s.group).filter(Boolean))].sort();
+  const list = sets.filter(s => !state.setGroup || s.group === state.setGroup).sort((a, b) => (b.date || "").localeCompare(a.date || "") || (b.updatedAt - a.updatedAt));
+  main.innerHTML = `<div class="wrap">
+    <div class="pagehead"><h1>Sets</h1><div class="actions"><button class="btn primary" data-act="new-set">New set</button></div></div>
+    ${groups.length ? `<div class="chips">${["", ...groups].map(g => `<button class="chip" data-act="set-group" data-g="${esc(g)}" aria-pressed="${state.setGroup === g}">${g ? esc(g) : "All"}</button>`).join("")}</div>` : ""}
+    ${sets.length ? `<ul class="list">${list.map(t => {
+      const n = t.items.filter(i => i.type === "song").length;
+      return `<li><button class="row" data-act="open-set" data-id="${t.id}"><span class="main-col"><span class="title">${esc(t.name || "Untitled set")}</span><span class="sub">${t.date ? `<span>${esc(fmtDate(t.date))}</span>` : ""}${t.group ? `<span class="tag">${esc(t.group)}</span>` : ""}<span>${n} song${n === 1 ? "" : "s"}</span></span></span><span class="btn sm primary" data-act="perform" data-id="${t.id}">Perform</span></button></li>`;
+    }).join("")}</ul>` : `<div class="empty"><strong>No sets yet</strong><span>Make one for each gig, or one per School of Rock group.</span><button class="btn primary" data-act="new-set">New set</button></div>`}
+  </div>`;
+}
+function fmtDate(d) { try { return new Date(d + "T12:00:00").toLocaleDateString(undefined, { weekday: "short", month: "short", day: "numeric", year: "numeric" }); } catch { return d; } }
+function renderSet() {
+  const t = state.sets.get(state.route.id);
+  if (!t || t.deleted) { go({ view: "sets" }); return; }
+  const main = $("#main");
+  let n = 0;
+  main.innerHTML = `<div class="wrap">
+    <div class="toolbar"><button class="btn ghost sm" data-act="nav" data-to="sets">‹ Sets</button><span class="sp"></span><button class="btn sm danger" data-act="delete-set">Delete set</button></div>
+    <div class="grid setfields">
+      <label class="field">Set name<input id="s-name" type="text" value="${esc(t.name)}" placeholder="Friday at The Rail" autocomplete="off"></label>
+      <label class="field">Date<input id="s-date" type="date" value="${esc(t.date)}"></label>
+      <label class="field">Band or group<input id="s-group" type="text" value="${esc(t.group)}" list="grouplist" placeholder="My band, SoR Tuesday" autocomplete="off"></label>
+      <datalist id="grouplist">${allGroups().map(g => `<option value="${esc(g)}">`).join("")}</datalist>
+    </div>
+    <div class="pagehead"><h2>${t.items.filter(i => i.type === "song").length} songs</h2><div class="actions"><button class="btn primary" data-act="perform" data-id="${t.id}" ${t.items.length ? "" : "disabled"}>Perform this set</button></div></div>
+    ${t.items.length ? `<p class="muted small" style="margin:0">Tap any song to open it. Prev and Next then move through this set, and Exit brings you back here.</p>` : ""}
+    ${t.items.length ? `<ul class="list setitems">${t.items.map((it, i) => {
+      const ctrls = `<span class="actions"><button class="btn sm" data-act="mv" data-i="${i}" data-d="-1" aria-label="Move up" ${i ? "" : "disabled"}>↑</button><button class="btn sm" data-act="mv" data-i="${i}" data-d="1" aria-label="Move down" ${i < t.items.length - 1 ? "" : "disabled"}>↓</button><button class="btn sm" data-act="rm" data-i="${i}" aria-label="Remove from set">×</button></span>`;
+      if (it.type === "break") return `<li class="breakrow"><div class="row"><span class="num"></span><span class="main-col"><span class="title">${esc(it.label || "Set break")}</span></span>${ctrls}</div></li>`;
+      const s = state.songs.get(it.id); n++;
+      if (!s || s.deleted) return `<li><div class="row"><span class="num">${n}</span><span class="main-col"><span class="title muted">Song was deleted</span><span class="sub">Restore it from Backup › Recently deleted</span></span>${ctrls}</div></li>`;
+      const k = displayKey(s);
+      return `<li><div class="row"><button class="openbtn" data-act="set-open" data-i="${i}" aria-label="Open ${esc(s.title)}"><span class="num">${n}</span><span class="main-col"><span class="title">${esc(s.title)}</span><span class="sub">${esc(s.artist)}</span></span>${k ? `<span class="keybadge">${esc(k)}</span>` : ""}</button>${ctrls}</div></li>`;
+    }).join("")}</ul>` : ""}
+    <div class="card picker"><div class="pagehead"><h2>Add songs</h2><div class="actions"><button class="btn sm" data-act="add-break">Add set break</button></div></div>
+      <input id="pick-q" type="search" placeholder="Search your songs" autocomplete="off"><div id="picklist"></div></div>
+  </div>`;
+  const field = (sel, key) => $(sel).addEventListener("input", e => { t[key] = e.target.value; debounce("set-" + t.id, 600, () => save("sets", t)); });
+  field("#s-name", "name"); field("#s-date", "date"); field("#s-group", "group");
+  $("#pick-q").addEventListener("input", renderPick); renderPick();
+}
+function renderPick() {
+  const t = state.sets.get(state.route.id); const q = $("#pick-q").value;
+  const inSet = new Set(t.items.map(i => i.id));
+  const list = liveSongs().filter(s => songMatches(s, q)).sort(sortTitle).slice(0, 80);
+  $("#picklist").innerHTML = list.length ? `<ul class="list">${list.map(s => `<li>${songRow(s, "pick", `<span class="btn sm ${inSet.has(s.id) ? "" : "primary"}">${inSet.has(s.id) ? "Add again" : "Add"}</span>`)}</li>`).join("")}</ul>` : `<p class="muted">No songs found. Add songs on the Songs page first.</p>`;
+}
+
+/* ---------- Perform ---------- */
+let autoscroll = { on: false, last: 0, acc: 0 };
+const SPEEDS = [5, 8, 12, 17, 23, 30, 40, 52, 68];
+function perfItems(t) { return t.items.filter(i => i.type === "break" || (state.songs.get(i.id) && !state.songs.get(i.id).deleted)); }
+/* Keep the screen awake while Stagebook is open. The Wake Lock API comes first; where the viewer
+   blocks it, a tiny muted looping video keeps iPadOS from dimming (the technique and clip come
+   from NoSleep.js, MIT licence). */
+const SILENT_MP4 = "data:video/mp4;base64,AAAAHGZ0eXBNNFYgAAACAGlzb21pc28yYXZjMQAAAAhmcmVlAAAGF21kYXTeBAAAbGliZmFhYyAxLjI4AABCAJMgBDIARwAAArEGBf//rdxF6b3m2Ui3lizYINkj7u94MjY0IC0gY29yZSAxNDIgcjIgOTU2YzhkOCAtIEguMjY0L01QRUctNCBBVkMgY29kZWMgLSBDb3B5bGVmdCAyMDAzLTIwMTQgLSBodHRwOi8vd3d3LnZpZGVvbGFuLm9yZy94MjY0Lmh0bWwgLSBvcHRpb25zOiBjYWJhYz0wIHJlZj0zIGRlYmxvY2s9MTowOjAgYW5hbHlzZT0weDE6MHgxMTEgbWU9aGV4IHN1Ym1lPTcgcHN5PTEgcHN5X3JkPTEuMDA6MC4wMCBtaXhlZF9yZWY9MSBtZV9yYW5nZT0xNiBjaHJvbWFfbWU9MSB0cmVsbGlzPTEgOHg4ZGN0PTAgY3FtPTAgZGVhZHpvbmU9MjEsMTEgZmFzdF9wc2tpcD0xIGNocm9tYV9xcF9vZmZzZXQ9LTIgdGhyZWFkcz02IGxvb2thaGVhZF90aHJlYWRzPTEgc2xpY2VkX3RocmVhZHM9MCBucj0wIGRlY2ltYXRlPTEgaW50ZXJsYWNlZD0wIGJsdXJheV9jb21wYXQ9MCBjb25zdHJhaW5lZF9pbnRyYT0wIGJmcmFtZXM9MCB3ZWlnaHRwPTAga2V5aW50PTI1MCBrZXlpbnRfbWluPTI1IHNjZW5lY3V0PTQwIGludHJhX3JlZnJlc2g9MCByY19sb29rYWhlYWQ9NDAgcmM9Y3JmIG1idHJlZT0xIGNyZj0yMy4wIHFjb21wPTAuNjAgcXBtaW49MCBxcG1heD02OSBxcHN0ZXA9NCB2YnZfbWF4cmF0ZT03NjggdmJ2X2J1ZnNpemU9MzAwMCBjcmZfbWF4PTAuMCBuYWxfaHJkPW5vbmUgZmlsbGVyPTAgaXBfcmF0aW89MS40MCBhcT0xOjEuMDAAgAAAAFZliIQL8mKAAKvMnJycnJycnJycnXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXiEASZACGQAjgCEASZACGQAjgAAAAAdBmjgX4GSAIQBJkAIZACOAAAAAB0GaVAX4GSAhAEmQAhkAI4AhAEmQAhkAI4AAAAAGQZpgL8DJIQBJkAIZACOAIQBJkAIZACOAAAAABkGagC/AySEASZACGQAjgAAAAAZBmqAvwMkhAEmQAhkAI4AhAEmQAhkAI4AAAAAGQZrAL8DJIQBJkAIZACOAAAAABkGa4C/AySEASZACGQAjgCEASZACGQAjgAAAAAZBmwAvwMkhAEmQAhkAI4AAAAAGQZsgL8DJIQBJkAIZACOAIQBJkAIZACOAAAAABkGbQC/AySEASZACGQAjgCEASZACGQAjgAAAAAZBm2AvwMkhAEmQAhkAI4AAAAAGQZuAL8DJIQBJkAIZACOAIQBJkAIZACOAAAAABkGboC/AySEASZACGQAjgAAAAAZBm8AvwMkhAEmQAhkAI4AhAEmQAhkAI4AAAAAGQZvgL8DJIQBJkAIZACOAAAAABkGaAC/AySEASZACGQAjgCEASZACGQAjgAAAAAZBmiAvwMkhAEmQAhkAI4AhAEmQAhkAI4AAAAAGQZpAL8DJIQBJkAIZACOAAAAABkGaYC/AySEASZACGQAjgCEASZACGQAjgAAAAAZBmoAvwMkhAEmQAhkAI4AAAAAGQZqgL8DJIQBJkAIZACOAIQBJkAIZACOAAAAABkGawC/AySEASZACGQAjgAAAAAZBmuAvwMkhAEmQAhkAI4AhAEmQAhkAI4AAAAAGQZsAL8DJIQBJkAIZACOAAAAABkGbIC/AySEASZACGQAjgCEASZACGQAjgAAAAAZBm0AvwMkhAEmQAhkAI4AhAEmQAhkAI4AAAAAGQZtgL8DJIQBJkAIZACOAAAAABkGbgCvAySEASZACGQAjgCEASZACGQAjgAAAAAZBm6AnwMkhAEmQAhkAI4AhAEmQAhkAI4AhAEmQAhkAI4AhAEmQAhkAI4AAAAhubW9vdgAAAGxtdmhkAAAAAAAAAAAAAAAAAAAD6AAABDcAAQAAAQAAAAAAAAAAAAAAAAEAAAAAAAAAAAAAAAAAAAABAAAAAAAAAAAAAAAAAABAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAwAAAzB0cmFrAAAAXHRraGQAAAADAAAAAAAAAAAAAAABAAAAAAAAA+kAAAAAAAAAAAAAAAAAAAAAAAEAAAAAAAAAAAAAAAAAAAABAAAAAAAAAAAAAAAAAABAAAAAALAAAACQAAAAAAAkZWR0cwAAABxlbHN0AAAAAAAAAAEAAAPpAAAAAAABAAAAAAKobWRpYQAAACBtZGhkAAAAAAAAAAAAAAAAAAB1MAAAdU5VxAAAAAAALWhkbHIAAAAAAAAAAHZpZGUAAAAAAAAAAAAAAABWaWRlb0hhbmRsZXIAAAACU21pbmYAAAAUdm1oZAAAAAEAAAAAAAAAAAAAACRkaW5mAAAAHGRyZWYAAAAAAAAAAQAAAAx1cmwgAAAAAQAAAhNzdGJsAAAAr3N0c2QAAAAAAAAAAQAAAJ9hdmMxAAAAAAAAAAEAAAAAAAAAAAAAAAAAAAAAALAAkABIAAAASAAAAAAAAAABAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAGP//AAAALWF2Y0MBQsAN/+EAFWdCwA3ZAsTsBEAAAPpAADqYA8UKkgEABWjLg8sgAAAAHHV1aWRraEDyXyRPxbo5pRvPAyPzAAAAAAAAABhzdHRzAAAAAAAAAAEAAAAeAAAD6QAAABRzdHNzAAAAAAAAAAEAAAABAAAAHHN0c2MAAAAAAAAAAQAAAAEAAAABAAAAAQAAAIxzdHN6AAAAAAAAAAAAAAAeAAADDwAAAAsAAAALAAAACgAAAAoAAAAKAAAACgAAAAoAAAAKAAAACgAAAAoAAAAKAAAACgAAAAoAAAAKAAAACgAAAAoAAAAKAAAACgAAAAoAAAAKAAAACgAAAAoAAAAKAAAACgAAAAoAAAAKAAAACgAAAAoAAAAKAAAAiHN0Y28AAAAAAAAAHgAAAEYAAANnAAADewAAA5gAAAO0AAADxwAAA+MAAAP2AAAEEgAABCUAAARBAAAEXQAABHAAAASMAAAEnwAABLsAAATOAAAE6gAABQYAAAUZAAAFNQAABUgAAAVkAAAFdwAABZMAAAWmAAAFwgAABd4AAAXxAAAGDQAABGh0cmFrAAAAXHRraGQAAAADAAAAAAAAAAAAAAACAAAAAAAABDcAAAAAAAAAAAAAAAEBAAAAAAEAAAAAAAAAAAAAAAAAAAABAAAAAAAAAAAAAAAAAABAAAAAAAAAAAAAAAAAAAAkZWR0cwAAABxlbHN0AAAAAAAAAAEAAAQkAAADcAABAAAAAAPgbWRpYQAAACBtZGhkAAAAAAAAAAAAAAAAAAC7gAAAykBVxAAAAAAALWhkbHIAAAAAAAAAAHNvdW4AAAAAAAAAAAAAAABTb3VuZEhhbmRsZXIAAAADi21pbmYAAAAQc21oZAAAAAAAAAAAAAAAJGRpbmYAAAAcZHJlZgAAAAAAAAABAAAADHVybCAAAAABAAADT3N0YmwAAABnc3RzZAAAAAAAAAABAAAAV21wNGEAAAAAAAAAAQAAAAAAAAAAAAIAEAAAAAC7gAAAAAAAM2VzZHMAAAAAA4CAgCIAAgAEgICAFEAVBbjYAAu4AAAADcoFgICAAhGQBoCAgAECAAAAIHN0dHMAAAAAAAAAAgAAADIAAAQAAAAAAQAAAkAAAAFUc3RzYwAAAAAAAAAbAAAAAQAAAAEAAAABAAAAAgAAAAIAAAABAAAAAwAAAAEAAAABAAAABAAAAAIAAAABAAAABgAAAAEAAAABAAAABwAAAAIAAAABAAAACAAAAAEAAAABAAAACQAAAAIAAAABAAAACgAAAAEAAAABAAAACwAAAAIAAAABAAAADQAAAAEAAAABAAAADgAAAAIAAAABAAAADwAAAAEAAAABAAAAEAAAAAIAAAABAAAAEQAAAAEAAAABAAAAEgAAAAIAAAABAAAAFAAAAAEAAAABAAAAFQAAAAIAAAABAAAAFgAAAAEAAAABAAAAFwAAAAIAAAABAAAAGAAAAAEAAAABAAAAGQAAAAIAAAABAAAAGgAAAAEAAAABAAAAGwAAAAIAAAABAAAAHQAAAAEAAAABAAAAHgAAAAIAAAABAAAAHwAAAAQAAAABAAAA4HN0c3oAAAAAAAAAAAAAADMAAAAaAAAACQAAAAkAAAAJAAAACQAAAAkAAAAJAAAACQAAAAkAAAAJAAAACQAAAAkAAAAJAAAACQAAAAkAAAAJAAAACQAAAAkAAAAJAAAACQAAAAkAAAAJAAAACQAAAAkAAAAJAAAACQAAAAkAAAAJAAAACQAAAAkAAAAJAAAACQAAAAkAAAAJAAAACQAAAAkAAAAJAAAACQAAAAkAAAAJAAAACQAAAAkAAAAJAAAACQAAAAkAAAAJAAAACQAAAAkAAAAJAAAACQAAAAkAAACMc3RjbwAAAAAAAAAfAAAALAAAA1UAAANyAAADhgAAA6IAAAO+AAAD0QAAA+0AAAQAAAAEHAAABC8AAARLAAAEZwAABHoAAASWAAAEqQAABMUAAATYAAAE9AAABRAAAAUjAAAFPwAABVIAAAVuAAAFgQAABZ0AAAWwAAAFzAAABegAAAX7AAAGFwAAAGJ1ZHRhAAAAWm1ldGEAAAAAAAAAIWhkbHIAAAAAAAAAAG1kaXJhcHBsAAAAAAAAAAAAAAAALWlsc3QAAAAlqXRvbwAAAB1kYXRhAAAAAQAAAABMYXZmNTUuMzMuMTAw";
+const awake = { lock: null, video: null, mode: "" };
+async function keepAwake() {
+  if (!state.prefs.awake || document.visibilityState !== "visible") return;
+  if (awake.lock || (awake.video && !awake.video.paused)) return;
+  try {
+    if ("wakeLock" in navigator) {
+      awake.lock = await navigator.wakeLock.request("screen");
+      awake.mode = "lock"; updateAwake();
+      awake.lock.addEventListener("release", () => { awake.lock = null; if (state.prefs.awake && document.visibilityState === "visible") keepAwake(); });
+      return;
+    }
+  } catch (e) { awake.lock = null; }
+  if (!awake.video) {
+    const v = document.createElement("video");
+    v.setAttribute("playsinline", ""); v.setAttribute("muted", ""); v.setAttribute("aria-hidden", "true");
+    v.muted = true; v.loop = true; v.src = SILENT_MP4;
+    v.style.cssText = "position:fixed;left:0;bottom:0;width:2px;height:2px;opacity:0.01;pointer-events:none;z-index:-1";
+    document.body.appendChild(v); awake.video = v;
+  }
+  try { await awake.video.play(); awake.mode = "video"; } catch { awake.mode = "failed"; }
+  updateAwake();
+}
+function stopAwake() {
+  try { awake.lock && awake.lock.release(); } catch {}
+  awake.lock = null; if (awake.video) awake.video.pause(); awake.mode = ""; updateAwake();
+}
+function updateAwake() {
+  const b = $("#awake"); if (!b) return;
+  const on = state.prefs.awake;
+  b.setAttribute("aria-pressed", String(on));
+  b.className = "status " + (!on ? "" : awake.mode === "failed" ? "warn" : awake.mode ? "ok" : "");
+  b.querySelector("span").textContent = !on ? "Screen can sleep" : awake.mode === "failed" ? "Tap to keep screen on" : "Screen stays on";
+  b.title = on ? "Stagebook keeps the iPad from going to sleep while it's open. Tap to turn off." : "Tap to keep the iPad awake while Stagebook is open.";
+}
+async function requestWake() { keepAwake(); }
+function releaseWake() {}
+document.addEventListener("visibilitychange", () => { if (document.visibilityState === "visible") keepAwake(); });
+document.addEventListener("pointerdown", () => { if (state.prefs.awake && !awake.lock && !(awake.video && !awake.video.paused)) keepAwake(); }, true);
+function renderPerform() {
+  const t = state.sets.get(state.route.setId);
+  if (!t) { go({ view: "sets" }); return; }
+  const items = perfItems(t);
+  if (!items.length) { go({ view: "set", id: t.id }); return; }
+  const idx = state.route.idx = clamp(state.route.idx || 0, 0, items.length - 1);
+  const it = items[idx], song = it.type === "song" ? state.songs.get(it.id) : null;
+  const songNums = items.filter(i => i.type === "song"); const pos = song ? songNums.indexOf(it) + 1 : 0;
+  const nextIt = items[idx + 1]; const nextSong = nextIt && nextIt.type === "song" ? state.songs.get(nextIt.id) : null;
+  $(".perform")?.remove();
+  const el = document.createElement("div"); el.className = "perform";
+  const sp = song ? clamp(song.scrollSpeed ?? 3, 0, SPEEDS.length - 1) : 3;
+  el.innerHTML = `
+    <div class="perf-top">
+      <button class="btn sm" data-act="perf-exit">Exit</button>
+      <div class="perf-title"><span class="perf-count">${song ? `${pos}/${songNums.length}` : "Break"}</span><strong>${esc(song ? song.title : it.label || "Set break")}</strong>${song && displayKey(song) ? `<span class="keybadge">${esc(displayKey(song))}</span>` : ""}${song && song.capo ? `<span class="tag">Capo ${song.capo}</span>` : ""}</div>
+      ${song ? `<span class="seg"><button class="btn sm" data-act="font" data-d="-1" aria-label="Smaller text">A−</button><button class="btn sm" data-act="font" data-d="1" aria-label="Larger text">A+</button></span>
+      <span class="seg"><button class="btn sm" data-act="as-toggle" aria-pressed="${autoscroll.on}">${autoscroll.on ? "Pause" : "Auto-scroll"}</button><button class="btn sm" data-act="as-speed" data-d="-1" aria-label="Slower">−</button><span class="val" title="Scroll speed">${sp + 1}</span><button class="btn sm" data-act="as-speed" data-d="1" aria-label="Faster">+</button></span>
+      ${song.tabUrl ? `<a class="btn sm" href="${esc(song.tabUrl)}" target="_blank" rel="noopener">Tab ↗</a>` : ""}
+      <button class="btn sm" data-act="markup" aria-pressed="${state.markup}">Markup</button>` : ""}
+      <button class="btn sm" data-act="perf-list">Set list</button>
+    </div>
+    ${song && song.notes ? `<div class="notebar">${esc(song.notes)}</div>` : ""}
+    <div class="sheetwrap" id="perfsheet">${song ? "" : `<div class="breakpage"><div>${esc(it.label || "Set break")}</div><span class="muted">Next up: ${nextSong ? esc(nextSong.title) : "end of set"}</span></div>`}</div>
+    <div class="perf-bottom">
+      <button class="btn" data-act="perf-go" data-d="-1" ${idx ? "" : "disabled"}>‹ Prev</button>
+      <div class="perf-next">${nextIt ? `Next: <strong>${esc(nextSong ? nextSong.title : nextIt.label || "Set break")}</strong>${nextSong && displayKey(nextSong) ? ` · ${esc(displayKey(nextSong))}` : ""}` : "Last song"}</div>
+      <button class="btn" data-act="perf-go" data-d="1" ${idx < items.length - 1 ? "" : "disabled"}>Next ›</button>
+    </div>`;
+  document.body.appendChild(el);
+  if (song) { sheet = mountSheet($("#perfsheet", el), song, { perform: true }); bindSwipe(sheet.scroller); if (state.route.atEnd) sheet.scroller.scrollTop = 1e6; }
+  state.route.atEnd = false;
+  requestWake();
+}
+function perfGo(d, atEnd) {
+  const t = state.sets.get(state.route.setId); const items = perfItems(t);
+  const ni = clamp((state.route.idx || 0) + d, 0, items.length - 1);
+  if (ni === state.route.idx) return;
+  stopAutoscroll(); if (sheet) { sheet.destroy(); sheet = null; }
+  state.markup = false; state.route.idx = ni; state.route.atEnd = !!atEnd; renderPerform();
+}
+function bindSwipe(el) {
+  let sx = 0, sy = 0, st = 0, ok = false;
+  el.addEventListener("touchstart", e => { const t = e.touches[0]; ok = e.touches.length === 1 && t.touchType !== "stylus" && !(state.markup && state.prefs.fingerDraw); sx = t.clientX; sy = t.clientY; st = Date.now(); if (autoscroll.on) stopAutoscroll(true); }, { passive: true });
+  el.addEventListener("touchend", e => {
+    if (!ok) return; const t = e.changedTouches[0]; const dx = t.clientX - sx, dy = t.clientY - sy;
+    const edge = el.scrollWidth <= el.clientWidth + 2 || (dx < 0 ? el.scrollLeft + el.clientWidth >= el.scrollWidth - 2 : el.scrollLeft <= 2);
+    if (edge && Math.abs(dx) > 70 && Math.abs(dx) > Math.abs(dy) * 2 && Date.now() - st < 700) perfGo(dx < 0 ? 1 : -1);
+  }, { passive: true });
+}
+function stopAutoscroll(byTouch) {
+  if (!autoscroll.on) return; autoscroll.on = false;
+  const b = $('[data-act="as-toggle"]'); if (b) { b.setAttribute("aria-pressed", "false"); b.textContent = "Auto-scroll"; }
+  if (byTouch) toast("Auto-scroll paused.");
+}
+function startAutoscroll() {
+  if (!sheet) return; autoscroll = { on: true, last: performance.now(), acc: 0 };
+  const b = $('[data-act="as-toggle"]'); if (b) { b.setAttribute("aria-pressed", "true"); b.textContent = "Pause"; }
+  const song = state.songs.get(perfItems(state.sets.get(state.route.setId))[state.route.idx].id);
+  const tick = now => {
+    if (!autoscroll.on || !sheet) return;
+    const dt = Math.min(0.1, (now - autoscroll.last) / 1000); autoscroll.last = now;
+    const sc = sheet.scroller;
+    autoscroll.acc += SPEEDS[clamp(song.scrollSpeed ?? 3, 0, SPEEDS.length - 1)] * (state.prefs.fontPx / 20) * dt;
+    const whole = Math.floor(autoscroll.acc);
+    if (whole) { sc.scrollTop += whole; autoscroll.acc -= whole; }
+    if (sc.scrollTop + sc.clientHeight >= sc.scrollHeight - 2) { stopAutoscroll(); return; }
+    requestAnimationFrame(tick);
+  };
+  requestAnimationFrame(tick);
+}
+function perfPage(dir) {
+  if (!sheet) { perfGo(dir); return; }
+  const sc = sheet.scroller;
+  if (dir > 0) { if (sc.scrollTop + sc.clientHeight >= sc.scrollHeight - 4) perfGo(1); else sc.scrollBy({ top: sc.clientHeight * 0.8, behavior: "smooth" }); }
+  else { if (sc.scrollTop <= 2) perfGo(-1, true); else sc.scrollBy({ top: -sc.clientHeight * 0.8, behavior: "smooth" }); }
+}
+function togglePerfList(btn) {
+  const host = $(".perform"); const ex = $(".perf-list", host); if (ex) { ex.remove(); return; }
+  const t = state.sets.get(state.route.setId); const items = perfItems(t);
+  const p = document.createElement("div"); p.className = "perf-list"; let n = 0;
+  p.innerHTML = `<div class="toolbar" style="padding:10px"><b>${esc(t.name || "Set")}</b><span class="sp"></span><button class="btn sm" data-act="perf-list">Close</button></div><ul class="list" style="border-radius:0;border-left:0;border-right:0">${items.map((it, i) => {
+    if (it.type === "break") return `<li class="breakrow"><button class="row" data-act="perf-jump" data-i="${i}" aria-current="${i === state.route.idx}"><span class="num"></span><span class="main-col"><span class="title">${esc(it.label || "Set break")}</span></span></button></li>`;
+    const s = state.songs.get(it.id); n++;
+    return `<li><button class="row" data-act="perf-jump" data-i="${i}" aria-current="${i === state.route.idx}"><span class="num">${n}</span><span class="main-col"><span class="title">${esc(s.title)}</span></span>${displayKey(s) ? `<span class="keybadge">${esc(displayKey(s))}</span>` : ""}</button></li>`;
+  }).join("")}</ul>`;
+  host.appendChild(p);
+}
+document.addEventListener("keydown", e => {
+  if (state.route.view !== "perform") return;
+  if (e.target.closest && e.target.closest("input, textarea, select")) return;
+  const k = e.key;
+  if (k === "PageDown" || k === "ArrowDown" || k === " " || k === "Enter") { e.preventDefault(); perfPage(1); }
+  else if (k === "PageUp" || k === "ArrowUp") { e.preventDefault(); perfPage(-1); }
+  else if (k === "ArrowRight") { e.preventDefault(); perfGo(1); }
+  else if (k === "ArrowLeft") { e.preventDefault(); perfGo(-1); }
+  else if (k === "Escape") go({ view: "set", id: state.route.setId });
+});
+
+/* ---------- Backup ---------- */
+function renderBackup() {
+  const main = $("#main");
+  const songs = liveSongs(), sets = liveSets();
+  const pdfs = songs.filter(s => s.pdf).length;
+  const inked = [...state.ink.values()].filter(d => (d.text || []).length || (d.pdf || []).length).length;
+  const trash = [...state.songs.values()].filter(s => s.deleted && !s.purged).map(s => ({ col: "songs", o: s })).concat([...state.sets.values()].filter(s => s.deleted && !s.purged).map(s => ({ col: "sets", o: s }))).sort((a, b) => (b.o.deletedAt || 0) - (a.o.deletedAt || 0));
+  const [cls, label, tip] = statusInfo();
+  main.innerHTML = `<div class="wrap">
+    <div class="pagehead"><h1>Backup</h1></div>
+    <div class="card">
+      <div class="eyebrow">Where your music lives</div>
+      <div class="statgrid">
+        <div class="stat"><b>${songs.length}</b>songs</div><div class="stat"><b>${sets.length}</b>sets</div><div class="stat"><b>${pdfs}</b>PDFs</div><div class="stat"><b>${inked}</b>songs with markup</div>
+      </div>
+      <p><span class="status ${cls}" style="cursor:default"><i></i><span>${esc(label)}</span></span></p>
+      <p class="muted">${esc(tip)} ${IN_CLAUDE ? `Every change is written to this device first, then copied to the cloud, so a dropped connection mid-gig never loses an edit.${state.lastSync ? ` Last cloud check: ${new Date(state.lastSync).toLocaleTimeString()}.` : ""}` : "Stagebook works with no internet at all, so the venue's Wi-Fi doesn't matter."}</p>
+      ${state.failed.size ? `<p style="color:var(--bad)">${state.failed.size} item(s) couldn't be backed up to the cloud. They are safe on this device; export a backup file to be sure.</p>` : ""}
+      ${state.localErr ? `<p style="color:var(--bad)">This browser blocked on-device storage, so the cloud copy is the only copy. Export a backup file regularly.</p>` : ""}
+    </div>
+    <div class="card">
+      <div class="eyebrow">Backup file</div>
+      ${IN_CLAUDE ? "" : `<p><b>Do this every week or two.</b> Tap Export backup, then choose <b>Save to Files</b> and pick iCloud Drive. If this iPad is ever lost or broken, install Stagebook on the new one and import that file.</p>`}
+      <p class="muted">A complete copy of your songs, sets, notes and markup in one file. Keep one in Files or iCloud Drive. Importing it later merges with what's here, and the newest version of each song wins.</p>
+      <label style="display:flex;gap:8px;align-items:center"><input type="checkbox" id="b-pdf" checked> Include PDFs (bigger file)</label>
+      <div class="actions"><button class="btn primary" data-act="export">Export backup</button><label class="btn" for="b-import">Import Stagebook backup or song files</label><input id="b-import" type="file" multiple hidden></div>
+      <div id="b-out"></div>
+    </div>
+    <div class="card">
+      <div class="eyebrow">Moving from OnSong</div>
+      <p class="muted">In OnSong, make a backup (it saves a .backup file to Files, iCloud Drive or Dropbox). Then choose that file here. Your songs, chord charts, attached PDFs and sets come across. Your OnSong library isn't changed, and importing the same backup again skips songs that are already here.</p>
+      <div class="actions"><label class="btn primary" for="b-onsong">Import OnSong backup</label><input id="b-onsong" type="file" hidden>
+        ${(() => { const u = untouchedOnSongItems(); const n = u.songs.length + u.sets.length; return n ? `<button class="btn danger" data-act="remove-onsong">Remove the OnSong import (${u.songs.length} songs, ${u.sets.length} sets)</button>` : ""; })()}</div>
+      <p class="muted small">If an import comes in wrong, remove it, then send me a backup report so I can fix the importer. Songs you've edited since importing are kept.</p>
+      <div class="actions"><label class="btn" for="b-inspect">Make a backup report</label><input id="b-inspect" type="file" hidden></div>
+      <div id="os-out"></div>
+    </div>
+    <div class="card">
+      <div class="eyebrow">Recently deleted</div>
+      ${trash.length ? `<ul class="list">${trash.map(({ col, o }) => `<li><div class="row"><span class="main-col"><span class="title">${esc(o.title || o.name || "Untitled")}</span><span class="sub">${col === "songs" ? "Song" : "Set"}${o.deletedAt ? " · deleted " + new Date(o.deletedAt).toLocaleDateString() : ""}</span></span><span class="actions"><button class="btn sm primary" data-act="restore" data-col="${col}" data-id="${o.id}">Restore</button><button class="btn sm danger" data-act="purge" data-col="${col}" data-id="${o.id}">Delete forever</button></span></div></li>`).join("")}</ul>` : `<p class="muted">Nothing here. Deleted songs and sets wait here until you remove them for good.</p>`}
+    </div>
+    <div class="card">
+      <div class="eyebrow">Before a gig</div>
+      ${IN_CLAUDE ? `<p class="muted">Inside the Claude app, Stagebook needs an internet connection to open. For gigs, use the offline Stagebook app on your home screen instead.</p>` : `<p class="muted">Nothing to prepare: your songs and PDFs are stored on this iPad, so Stagebook works on any Wi-Fi or none.</p>`}
+      <p class="muted">${IN_CLAUDE ? "Stagebook can't stop the iPad from sleeping on its own here." : "Stagebook asks the iPad to keep the screen on. If it still dims,"} Set <b>Settings › Display &amp; Brightness › Auto-Lock</b> to <b>Never</b> before you play, and back afterwards to save battery.</p>
+    </div>
+  </div>`;
+  $("#b-import").addEventListener("change", e => importFiles([...e.target.files]));
+  $("#b-onsong").addEventListener("change", e => importFiles([...e.target.files]));
+  $("#b-inspect").addEventListener("change", e => { if (e.target.files[0]) reportBackup(e.target.files[0]); });
+}
+async function blobToB64(b) { const buf = new Uint8Array(await b.arrayBuffer()); let s = ""; for (let i = 0; i < buf.length; i += 0x8000) s += String.fromCharCode.apply(null, buf.subarray(i, i + 0x8000)); return btoa(s); }
+function lastBackupDays() { try { const t = +localStorage.getItem("stagebook.lastBackup"); return t ? Math.floor((Date.now() - t) / 864e5) : null; } catch { return null; } }
+function markBackedUp() { try { localStorage.setItem("stagebook.lastBackup", String(Date.now())); } catch {} updateStatus(); }
+function backupReminder() {
+  const days = lastBackupDays();
+  if (!liveSongs().length || (days != null && days < 7)) return;
+  setTimeout(() => toast(days == null ? "Your songs are only on this iPad. Save a backup file to be safe." : `Your last backup file is ${days} days old.`, { label: "Back up now", run: () => { go({ view: "backup" }); setTimeout(exportBackup, 300); } }), 1500);
+}
+async function exportBackup() {
+  const withPdf = $("#b-pdf")?.checked;
+  const data = { app: "Stagebook", version: 1, exportedAt: new Date().toISOString(), songs: [...state.songs.values()].filter(s => !s.purged), sets: [...state.sets.values()].filter(s => !s.purged), ink: [...state.ink.values()], pdfs: {} };
+  if (withPdf) for (const s of data.songs) if (s.pdf) { const b = await getPdfBlob(s); if (b) data.pdfs[s.id] = await blobToB64(b); }
+  /* Build the file from pieces so a library with many PDFs never becomes one giant string. */
+  const pdfs = data.pdfs; data.pdfs = {};
+  const head = JSON.stringify(data).replace(/"pdfs":\{\}\}$/, '"pdfs":{');
+  const parts = [head]; let first = true;
+  for (const [id, b64] of Object.entries(pdfs)) { parts.push((first ? "" : ",") + JSON.stringify(id) + ":\"" + b64 + "\""); first = false; }
+  parts.push("}}");
+  const blob = new Blob(parts, { type: "application/json" });
+  const name = `stagebook-backup-${new Date().toISOString().slice(0, 10)}.json`;
+  if (downloadsApi) {
+    try { await downloadsApi.save({ filename: name, data: blob }); toast("Backup saved."); markBackedUp(); return; }
+    catch (e) { if (e && e.code === "declined") return; console.warn(e); }
+  }
+  if (!IN_CLAUDE) {
+    const file = new File([blob], name, { type: "application/json" });
+    if (navigator.canShare && navigator.canShare({ files: [file] })) {
+      try { await navigator.share({ files: [file], title: "Stagebook backup" }); toast("Backup saved."); markBackedUp(); return; }
+      catch (e) { if (e && e.name === "AbortError") return; console.warn(e); }
+    }
+    const a = document.createElement("a"); a.href = URL.createObjectURL(blob); a.download = name; document.body.appendChild(a); a.click(); a.remove();
+    setTimeout(() => URL.revokeObjectURL(a.href), 60000); markBackedUp(); toast("Backup file downloaded."); return;
+  }
+  const json = await blob.text();
+  const out = $("#b-out"); if (!out) return;
+  out.innerHTML = `<p class="muted">Saving files isn't available here, so copy this text and paste it into a note or file instead.</p><div class="actions"><button class="btn" id="b-copy">Copy backup text</button></div><textarea rows="5" readonly style="font-family:var(--font-mono);font-size:12px"></textarea>`;
+  $("textarea", out).value = json;
+  $("#b-copy").onclick = () => navigator.clipboard.writeText(json).then(() => toast("Backup copied."), () => { $("textarea", out).select(); toast("Select all and copy the text."); });
+}
+async function importBackup(file) {
+  const data = JSON.parse(await file.text());
+  if (!data || data.app !== "Stagebook") throw new Error("Not a Stagebook backup");
+  let n = 0;
+  for (const col of COLS) for (const o of data[col] || []) {
+    const l = state[col].get(o.id);
+    if (!l || (o.updatedAt || 0) > (l.updatedAt || 0)) { state[col].set(o.id, o); IDB.put("docs", col + "/" + o.id, o); queue(col + "/" + o.id); n++; }
+  }
+  for (const [id, b64] of Object.entries(data.pdfs || {})) {
+    const bin = atob(b64); const arr = new Uint8Array(bin.length); for (let i = 0; i < bin.length; i++) arr[i] = bin.charCodeAt(i);
+    const blob = await putPdf(id, new Blob([arr], { type: "application/pdf" }));
+    const s = state.songs.get(id); if (s && s.pdf && !s.pdf.assetId) { s.pdf.local = true; uploadPdf(s, blob); }
+  }
+  toast(`Backup imported: ${n} item${n === 1 ? "" : "s"} added or updated.`);
+}
+
+/* ---------- actions ---------- */
+document.addEventListener("click", e => {
+  const pk = e.target.closest(".pk"); if (pk) { paletteInsert(pk.dataset.pk, pk.dataset.v); return; }
+  const el = e.target.closest("[data-act]"); if (!el || el.disabled) return;
+  const a = el.dataset.act, r = state.route;
+  const song = r.view === "song" ? state.songs.get(r.id) : r.view === "perform" ? (() => { const t = state.sets.get(r.setId); const it = t && perfItems(t)[r.idx || 0]; return it && it.type === "song" ? state.songs.get(it.id) : null; })() : null;
+  switch (a) {
+    case "nav": go({ view: el.dataset.to }); break;
+    case "tag": state.tag = el.dataset.tag; render(); break;
+    case "set-group": state.setGroup = el.dataset.g; render(); break;
+    case "new-song": { const s = newSong(); if (state.tag) s.tags = [state.tag]; state.songs.set(s.id, s); go({ view: "edit", id: s.id }); break; }
+    case "open-song": go({ view: "song", id: el.dataset.id }); break;
+    case "edit-song": go({ view: "edit", id: r.id }); break;
+    case "done-edit": { const id = r.id; finishEdit(); go({ view: state.songs.has(id) ? "song" : "songs", id }); break; }
+    case "delete-song": {
+      const s = state.songs.get(r.id);
+      if (setsContaining(s.id).length) showDeleteWarning(s); else deleteSong(s);
+      break;
+    }
+    case "del-cancel": $("#delwarn")?.remove(); break;
+    case "del-anyway": deleteSong(state.songs.get(r.id)); break;
+    case "del-swap": {
+      const s = state.songs.get(r.id), twin = state.songs.get(el.dataset.twin);
+      const sets = setsContaining(s.id);
+      const before = sets.map(t => [t, t.items]);
+      for (const t of sets) { t.items = t.items.map(i => i.type === "song" && i.id === s.id ? Object.assign({}, i, { id: twin.id }) : i); save("sets", t); }
+      deleteSong(s, `Swapped the other copy into ${sets.length} set${sets.length === 1 ? "" : "s"} and deleted this one.`, () => { for (const [t, items] of before) { t.items = items; save("sets", t); } });
+      break;
+    }
+    case "tr": if (song) { song.transpose = clamp((song.transpose || 0) + +el.dataset.d, -11, 11); if (Math.abs(song.transpose) === 12) song.transpose = 0; save("songs", song); render(); } break;
+    case "font": state.prefs.fontPx = clamp(state.prefs.fontPx + (+el.dataset.d) * 2, 12, 44); savePrefs(); if (sheet) sheet.refresh(); break;
+    case "fit": state.prefs.fit = !state.prefs.fit; savePrefs(); el.setAttribute("aria-pressed", String(state.prefs.fit)); if (sheet) sheet.refresh(); break;
+    case "view": if (song) { song.view = el.dataset.v; save("songs", song); render(); } break;
+    case "add-sticky": sheet && sheet.addSticky(); break;
+    case "tab-add": {
+      if ($("#tabbar")) { $("#tab-in").focus(); break; }
+      const s = state.songs.get(r.id);
+      const bar = document.createElement("div"); bar.id = "tabbar"; bar.className = "card"; bar.style.padding = "12px";
+      bar.innerHTML = `<label class="field">Tab link<input id="tab-in" type="url" placeholder="Paste the link from Ultimate Guitar" autocomplete="off"></label>
+        <p class="muted small" style="margin:0">In Ultimate Guitar, open the tab, tap Share, then Copy link. Come back and paste it here. Pasting the whole shared message works too.</p>
+        <div class="actions"><button class="btn sm primary" data-act="tab-save">Save link</button><a class="btn sm" href="${esc(ugSearchUrl(s))}" target="_blank" rel="noopener">Find tab on UG ↗</a>${s.tabUrl ? `<button class="btn sm danger" data-act="tab-remove">Remove link</button>` : ""}<button class="btn sm" data-act="tab-cancel">Cancel</button></div>`;
+      $(".songhead").appendChild(bar);
+      const inp = $("#tab-in"); inp.value = s.tabUrl || ""; inp.focus();
+      inp.addEventListener("keydown", ev => { if (ev.key === "Enter") { ev.preventDefault(); $('[data-act="tab-save"]').click(); } });
+      break;
+    }
+    case "tab-save": {
+      const s = state.songs.get(r.id); const url = extractUrl($("#tab-in").value);
+      if (!url) { toast("That doesn't look like a link. Copy the tab's link in Ultimate Guitar and paste it here."); break; }
+      s.tabUrl = url; save("songs", s); render(); toast("Tab link saved. Tap Open tab to go straight to it."); break;
+    }
+    case "tab-remove": { const s = state.songs.get(r.id); const old = s.tabUrl; s.tabUrl = ""; save("songs", s); render(); toast("Tab link removed.", { label: "Undo", run: () => { s.tabUrl = old; save("songs", s); render(); } }); break; }
+    case "tab-cancel": $("#tabbar")?.remove(); break;
+    case "markup": state.markup = !state.markup; if (sheet) state.markup ? sheet.showTray() : sheet.hideTray(); el.setAttribute("aria-pressed", String(state.markup)); break;
+    case "add-to-set": {
+      const s = state.songs.get(r.id);
+      const items = liveSets().sort((x, y) => (y.updatedAt || 0) - (x.updatedAt || 0)).slice(0, 15).map(t => ({ label: t.name || "Untitled set", run: () => { t.items = t.items.concat([{ type: "song", id: s.id }]); save("sets", t); toast(`Added to ${t.name || "set"}.`); } }));
+      items.push({ label: "+ New set with this song", run: () => { const t = newSet({ name: "New set", items: [{ type: "song", id: s.id }] }); save("sets", t); go({ view: "set", id: t.id }); } });
+      openMenu(el, items); break;
+    }
+    case "pdf-text": (async () => {
+      const s = state.songs.get(r.id); const b = await getPdfBlob(s); if (!b) { toast("The PDF isn't available offline yet."); return; }
+      try { const pdf = await openPdf(b); const { text, urls } = await pdfToText(pdf); const c = cleanPdfText(text, urls); const p = parseSongText(c.text, s.title);
+        if (s.chart.trim()) s.chartBackup = s.chart;
+        s.chart = p.chart; if (!s.tabUrl && c.tabUrl) s.tabUrl = c.tabUrl; if (!s.key && p.key) s.key = p.key; save("songs", s); render();
+        toast("Chart text pulled from the PDF.", s.chartBackup ? { label: "Undo", run: () => { s.chart = s.chartBackup; save("songs", s); render(); } } : null);
+      } catch (err) { toast("Couldn't read text from this PDF."); }
+    })(); break;
+    case "pdf-remove": { const s = state.songs.get(r.id); const old = s.pdf; s.pdf = null; s.view = "text"; save("songs", s); render(); toast("PDF removed.", { label: "Undo", run: () => { s.pdf = old; save("songs", s); render(); } }); break; }
+    case "new-set": { const t = newSet({ group: state.setGroup }); save("sets", t); go({ view: "set", id: t.id }); setTimeout(() => $("#s-name")?.focus(), 50); break; }
+    case "open-set": if (!e.target.closest('[data-act="perform"]')) go({ view: "set", id: el.dataset.id }); break;
+    case "perform": e.stopPropagation(); go({ view: "perform", setId: el.dataset.id, idx: 0 }); break;
+    case "set-open": { const t = state.sets.get(r.id); const idx = perfItems(t).indexOf(t.items[+el.dataset.i]); go({ view: "perform", setId: t.id, idx: Math.max(0, idx) }); break; }
+    case "pick": { const t = state.sets.get(r.id); t.items = t.items.concat([{ type: "song", id: el.dataset.id }]); save("sets", t); const q = $("#pick-q").value; const y = $("#main").scrollTop; render(); $("#pick-q").value = q; renderPick(); $("#main").scrollTop = y; break; }
+    case "add-break": { const t = state.sets.get(r.id); t.items = t.items.concat([{ type: "break", label: "Set break" }]); save("sets", t); const y = $("#main").scrollTop; render(); $("#main").scrollTop = y; break; }
+    case "mv": { const t = state.sets.get(r.id); const i = +el.dataset.i, j = i + +el.dataset.d; const items = t.items.slice(); [items[i], items[j]] = [items[j], items[i]]; t.items = items; save("sets", t); const y = $("#main").scrollTop; render(); $("#main").scrollTop = y; break; }
+    case "rm": { const t = state.sets.get(r.id); const before = t.items; t.items = t.items.filter((_, i) => i !== +el.dataset.i); save("sets", t); const y = $("#main").scrollTop; render(); $("#main").scrollTop = y; toast("Removed from set.", { label: "Undo", run: () => { t.items = before; save("sets", t); render(); } }); break; }
+    case "delete-set": { const t = state.sets.get(r.id); t.deleted = true; t.deletedAt = Date.now(); save("sets", t); go({ view: "sets" }); toast(`Deleted “${t.name || "set"}”.`, { label: "Undo", run: () => { t.deleted = false; save("sets", t); go({ view: "set", id: t.id }); } }); break; }
+    case "perf-exit": go({ view: "set", id: r.setId }); break;
+    case "perf-go": perfGo(+el.dataset.d); break;
+    case "perf-list": togglePerfList(el); break;
+    case "perf-jump": { const i = +el.dataset.i; perfGo(i - (r.idx || 0)); break; }
+    case "as-toggle": autoscroll.on ? stopAutoscroll() : startAutoscroll(); break;
+    case "as-speed": if (song) { song.scrollSpeed = clamp((song.scrollSpeed ?? 3) + +el.dataset.d, 0, SPEEDS.length - 1); save("songs", song); const v = el.parentElement.querySelector(".val"); if (v) v.textContent = song.scrollSpeed + 1; } break;
+    case "export": exportBackup(); break;
+    case "awake": state.prefs.awake = !state.prefs.awake; savePrefs(); if (state.prefs.awake) keepAwake(); else stopAwake(); updateAwake(); toast(state.prefs.awake ? "The screen will stay on while Stagebook is open." : "The screen can sleep again."); break;
+    case "remove-onsong":
+      if (el.dataset.confirm !== "1") { el.dataset.confirm = "1"; el.textContent = "Tap again to remove the import"; setTimeout(() => { if (el.isConnected) render(); }, 5000); break; }
+      removeOnSongImport(); break;
+    case "restore": { const o = state[el.dataset.col].get(el.dataset.id); o.deleted = false; delete o.deletedAt; save(el.dataset.col, o); render(); toast(`Restored “${o.title || o.name}”.`); break; }
+    case "purge": {
+      if (el.dataset.confirm !== "1") { el.dataset.confirm = "1"; el.textContent = "Tap again to delete"; setTimeout(() => { if (el.isConnected) { el.dataset.confirm = ""; el.textContent = "Delete forever"; } }, 4000); break; }
+      const col = el.dataset.col, o = state[col].get(el.dataset.id);
+      const stub = { id: o.id, deleted: true, purged: true, deletedAt: o.deletedAt || Date.now(), title: "", name: "" };
+      if (col === "songs") { IDB.del("blobs", "pdf:" + o.id); if (o.pdf && o.pdf.assetId && assetsApi) assetsApi.delete(o.pdf.assetId).catch(() => {}); const ink = state.ink.get(o.id); if (ink) save("ink", { id: o.id, text: [], pdf: [] }); }
+      save(col, stub); render(); break;
+    }
+  }
+});
+
+/* ---------- start ---------- */
+(async function start() {
+  try { if (navigator.storage && navigator.storage.persist) navigator.storage.persist(); } catch {}
+  for (const [k, v] of await IDB.entries("docs")) { const [col, id] = String(k).split("/"); if (state[col] instanceof Map && v) state[col].set(id, v); }
+  for (const p of (await IDB.get("meta", "pending")) || []) state.pending.add(p);
+  try { const r = JSON.parse(localStorage.getItem("stagebook.route") || "null"); if (r && ["songs", "sets", "backup", "song", "set"].includes(r.view)) state.route = r; } catch {}
+  if ((state.route.view === "song" && !state.songs.get(state.route.id)) || (state.route.view === "set" && !state.sets.get(state.route.id))) state.route = { view: state.route.view === "set" ? "sets" : "songs" };
+  render();
+  initCloud();
+})();
+</script>
+<script>
+if ("serviceWorker" in navigator) {
+  const hadController = !!navigator.serviceWorker.controller;
+  navigator.serviceWorker.register("sw.js").catch(() => {});
+  navigator.serviceWorker.addEventListener("controllerchange", () => {
+    if (hadController && window.toast) toast("A new version of Stagebook is ready.", { label: "Reload", run: () => location.reload() });
+  });
+}
+</script>
+</body>
+</html>
