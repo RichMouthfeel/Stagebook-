@@ -153,6 +153,14 @@ input[type="date"] { -webkit-appearance: none; appearance: none; display: block;
 .chart .sec + .ln { margin-top: 0.25em; }
 .chart .cmt { font-family: var(--font-body); font-style: italic; color: var(--muted); }
 .chart .tab { color: var(--fg); opacity: 0.85; }
+.chart .ln.img { white-space: normal; padding-block: 0.3em; }
+.chartimg { max-width: none; border-radius: 6px; overflow: hidden; background: var(--surface-2); display: flex; align-items: center; justify-content: center; }
+.chartimg.missing { font-family: var(--font-body); color: var(--muted); }
+.chartimg.missing::before { content: none; }
+.chartimg img { width: 100%; height: 100%; display: block; object-fit: contain; }
+#artist-sugg:empty { display: none; }
+#artist-sugg { margin-top: 6px; }
+
 .chart a { color: var(--accent); }
 .pdfpages { display: flex; flex-direction: column; gap: 12px; width: 100%; }
 .pdfpages canvas { width: 100%; height: auto; display: block; background: #fff; border-radius: 4px; box-shadow: var(--shadow); }
@@ -330,7 +338,9 @@ function chartHTML(text, semi, flats) {
     const dir = line.match(/^\s*\{\s*([a-z_]+)\s*(?::\s*(.*?))?\s*\}\s*$/i);
     if (dir) {
       const k = dir[1].toLowerCase(), v = dir[2] || "";
-      if (["c", "comment", "ci", "comment_italic", "cb", "comment_box"].includes(k)) out.push(`<div class="ln cmt">${esc(v)}</div>`);
+      const im = k === "image" && parseImageLine(line);
+      if (im) out.push(`<div class="ln img"><div class="chartimg" data-img="${esc(im.id)}" style="width:${im.w}em;height:${(im.w * im.r).toFixed(3)}em"></div></div>`);
+      else if (["c", "comment", "ci", "comment_italic", "cb", "comment_box"].includes(k)) out.push(`<div class="ln cmt">${esc(v)}</div>`);
       else if (["soc", "start_of_chorus"].includes(k)) out.push(`<div class="ln sec">${esc(v || "Chorus")}</div>`);
       else if (["sov", "start_of_verse"].includes(k)) out.push(`<div class="ln sec">${esc(v || "Verse")}</div>`);
       else if (["sob", "start_of_bridge"].includes(k)) out.push(`<div class="ln sec">${esc(v || "Bridge")}</div>`);
@@ -1209,6 +1219,7 @@ function mountSheet(host, song, opts = {}) {
       content.style.fontSize = px + "px";
     }
     unit = px;
+    hydrateImages(content, song);
   }
   async function layoutPdf() {
     content.className = "pdfpages";
@@ -1424,7 +1435,7 @@ function renderEdit() {
       <div class="actions"><span class="savedline" id="savedline">Changes save as you type</span><button class="btn primary" data-act="done-edit">Done</button></div></div>
     <div class="grid">
       <label class="field">Title<input id="f-title" type="text" value="${esc(s.title)}" placeholder="Song title" autocomplete="off"></label>
-      <label class="field">Artist<input id="f-artist" type="text" value="${esc(s.artist)}" placeholder="Artist" autocomplete="off"></label>
+      <label class="field">Artist<input id="f-artist" type="text" value="${esc(s.artist)}" placeholder="Artist" autocomplete="off" autocorrect="off"><span class="chips" id="artist-sugg" aria-live="polite"></span></label>
     </div>
     <div class="grid">
       <label class="field">Key<select id="f-key"><option value="">Auto-detect</option>${ALL_KEYS.map(k => `<option ${s.key === k ? "selected" : ""}>${k}</option>`).join("")}</select></label>
@@ -1441,11 +1452,13 @@ function renderEdit() {
     <div class="pdfbox">${s.pdf ? `<span><b>PDF:</b> ${esc(s.pdf.name || "attached")}</span><button class="btn sm" data-act="pdf-text">Pull chart text from PDF</button><button class="btn sm danger" data-act="pdf-remove">Remove PDF</button>` : `<span class="muted">No PDF attached.</span>`}
       <label class="btn sm" for="f-pdf">${s.pdf ? "Replace PDF" : "Attach a PDF"}</label><input id="f-pdf" type="file" accept=".pdf,application/pdf" hidden></div>
     <div class="palette" id="palette"></div>
+    <input id="f-img" type="file" accept="image/*" hidden>
     <label class="field">Chord chart<textarea id="f-chart" class="chartedit" wrap="off" spellcheck="false" autocapitalize="off" autocorrect="off" placeholder="Verse:\nG         C         G\nThere is a house in New Orleans\n\nType chords on the line above the lyrics, or inline like [G]There is a [C]house.">${esc(s.chart)}</textarea></label>
   </div>`;
   const upd = (field, fn) => $(field).addEventListener("input", e => { fn(e.target.value); queueEditSave(); });
   upd("#f-title", v => s.title = v);
   upd("#f-artist", v => { s.artist = v; ugLink(); });
+  bindArtistField(s);
   $("#f-title").addEventListener("input", ugLink);
   $("#f-key").addEventListener("change", e => { s.key = e.target.value; queueEditSave(); renderPalette(); });
   upd("#f-capo", v => s.capo = clamp(parseInt(v, 10) || 0, 0, 12));
@@ -1462,6 +1475,10 @@ function renderEdit() {
   });
   function ugLink() { $("#ug-search").href = ugSearchUrl(s); }
   ugLink(); renderPalette();
+  const chartTa = $("#f-chart");
+  const trackPos = () => { editState.pos = chartTa.selectionStart; const onImg = !!imageAtCursor(); if (onImg !== !!editState.onImg) { editState.onImg = onImg; renderPalette(); } };
+  for (const ev of ["keyup", "click", "select", "input", "focus"]) chartTa.addEventListener(ev, trackPos);
+  $("#f-img").addEventListener("change", e => { const f = e.target.files[0]; e.target.value = ""; if (f) addImageToChart(f); });
   if (!s.title) $("#f-title").focus();
 }
 function queueEditSave() {
@@ -1483,18 +1500,23 @@ function renderPalette() {
   const freq = {}; for (const c of chordsIn(s.chart)) freq[c] = (freq[c] || 0) + 1;
   const used = Object.entries(freq).sort((a, b) => b[1] - a[1]).map(x => x[0]).slice(0, 10);
   const pk = (v, cls = "c", kind = "chord") => `<button class="pk ${cls}" data-pk="${kind}" data-v="${esc(v)}">${esc(v)}</button>`;
+  const img = imageAtCursor();
   el.innerHTML = `
+    ${img ? `<div class="prow"><span class="lbl">Picture</span><button class="pk s" data-pk="imgsize" data-v="-1">Smaller</button><button class="pk s" data-pk="imgsize" data-v="1">Larger</button><button class="pk s" data-pk="imgdel">Remove picture</button></div>` : ""}
     <div class="prow"><span class="lbl">${k ? "Key of " + esc(k) : "Key"}</span>${k ? diatonic(k).map(c => pk(c)).join("") : '<span class="muted small">Type a few chords and the key appears here.</span>'}</div>
     ${used.length ? `<div class="prow"><span class="lbl">In song</span>${used.map(c => pk(c)).join("")}</div>` : ""}
     <div class="prow"><span class="lbl">Build</span>${["C", "D", "E", "F", "G", "A", "B"].map(c => pk(c)).join("")}${["#", "b", "m", "7", "maj7", "m7", "sus2", "sus4", "add9", "dim", "/"].map(m => pk(m, "", "mod")).join("")}${pk("|", "", "sym")}${pk("N.C.", "", "chord")}${pk("x2", "", "sym")}</div>
     <div class="prow"><span class="lbl">Sections</span>${["Intro", "Verse", "Pre-Chorus", "Chorus", "Bridge", "Solo", "Outro"].map(c => pk(c, "s", "sec")).join("")}
       <button class="pk s" data-pk="tab" title="Build guitar or bass tab by tapping frets">+ Tab</button>
+      <label class="pk s" for="f-img" style="display:inline-flex;align-items:center" title="Add a photo or screenshot, like a tab snippet or bass fill">+ Picture</label>
       <button class="pk s" data-pk="inline" aria-pressed="${state.prefs.inline}" style="${state.prefs.inline ? "background:var(--fg);color:var(--bg)" : ""}" title="Insert chords as [G] inside the lyric line">[ ] inline</button></div>`;
 }
 function paletteInsert(kind, v) {
   const ta = $("#f-chart"); if (!ta) return;
   if (kind === "inline") { state.prefs.inline = !state.prefs.inline; savePrefs(); renderPalette(); return; }
   if (kind === "tab") { openTabBuilder(); return; }
+  if (kind === "imgsize") { editImageLine(+v); return; }
+  if (kind === "imgdel") { editImageLine("del"); toast("Picture removed from the chart."); return; }
   ta.focus();
   let a = ta.selectionStart, b = ta.selectionEnd; const val = ta.value; const es = editState;
   let text, cursorAfter;
@@ -1516,6 +1538,141 @@ function paletteInsert(kind, v) {
   es.autoAt = keepAuto; es.closeAt = keepClose;
 }
 document.addEventListener("pointerdown", e => { if (e.target.closest(".pk")) e.preventDefault(); });
+
+/* ---------- Pictures in charts ----------
+   A chart line {image: ID w=30 r=0.4} shows a picture ID that is w em wide with height/width ratio r.
+   Sizes are in em so the picture scales with the text and Pencil markup stays lined up. */
+const IMG_DIR_RE = /^\s*\{\s*image\s*:\s*([A-Za-z0-9_-]+)((?:\s+[a-z]+=[\d.]+)*)\s*\}\s*$/i;
+function parseImageLine(line) {
+  const m = line.match(IMG_DIR_RE); if (!m) return null;
+  const o = { id: m[1], w: 30, r: 0.5 };
+  for (const [, k, v] of m[2].matchAll(/([a-z]+)=([\d.]+)/gi)) if (k === "w" || k === "r") o[k] = +v;
+  o.w = clamp(o.w || 30, 4, 80); o.r = clamp(o.r || 0.5, 0.02, 10);
+  return o;
+}
+const imageLine = o => `{image: ${o.id} w=${Math.round(o.w)} r=${Math.round(o.r * 1000) / 1000}}`;
+async function putImage(id, blob) {
+  const bytes = await blob.arrayBuffer();
+  await IDB.put("blobs", "img:" + id, { type: blob.type || "image/jpeg", bytes });
+  return new Blob([bytes], { type: blob.type || "image/jpeg" });
+}
+async function readLocalImage(id) {
+  const v = await IDB.get("blobs", "img:" + id);
+  try { if (v && v.bytes) return new Blob([v.bytes], { type: v.type || "image/jpeg" }); } catch {}
+  return null;
+}
+async function getImageBlob(song, id) {
+  const local = await readLocalImage(id); if (local) return local;
+  const meta = song && song.images && song.images[id];
+  const src = meta && (meta.url || (meta.assetId ? "/_blob/" + meta.assetId : ""));
+  if (!src) return null;
+  try { const r = await fetch(src); if (!r.ok) return null; return await putImage(id, await r.blob()); } catch { return null; }
+}
+/* Shrink big photos and screenshots so they stay quick to load and small in backups. */
+async function prepareImage(file) {
+  const url = URL.createObjectURL(file);
+  try {
+    const img = await new Promise((res, rej) => { const i = new Image(); i.onload = () => res(i); i.onerror = () => rej(new Error("That file isn't a picture Stagebook can read.")); i.src = url; });
+    const sc = Math.min(1, 1800 / img.naturalWidth);
+    const w = Math.max(1, Math.round(img.naturalWidth * sc)), h = Math.max(1, Math.round(img.naturalHeight * sc));
+    const c = document.createElement("canvas"); c.width = w; c.height = h;
+    c.getContext("2d").drawImage(img, 0, 0, w, h);
+    const type = file.type === "image/png" && file.size < 2e6 ? "image/png" : "image/jpeg";
+    const blob = await new Promise(r => c.toBlob(r, type, 0.88));
+    return { blob: blob || file, w: img.naturalWidth, h: img.naturalHeight };
+  } finally { URL.revokeObjectURL(url); }
+}
+async function addImageToChart(file) {
+  const ta = $("#f-chart"); const s = editState && state.songs.get(editState.id); if (!ta || !s) return;
+  let prep;
+  try { prep = await prepareImage(file); } catch (e) { toast(e.message || "Couldn't read that picture."); return; }
+  const id = "i" + uid();
+  const blob = await putImage(id, prep.blob);
+  /* A screenshot taken on a 2x iPad screen shows at half its pixel size; 20px text ≈ 1em. */
+  const o = { id, w: clamp(Math.round(prep.w / 2 / 20), 8, 44), r: prep.h / prep.w };
+  insertChartLines(ta, imageLine(o), editState.pos ?? ta.value.length);
+  s.chart = ta.value; queueEditSave(); renderPalette();
+  toast("Picture added to the chart.");
+  if (assetsApi) {
+    try {
+      const r = await assetsApi.upload(blob, { type: blob.type });
+      const cur = state.songs.get(s.id); cur.images = Object.assign({}, cur.images, { [id]: { assetId: r.id, url: r.url } }); save("songs", cur);
+    } catch (e) { console.warn("Picture upload failed", e); }
+  }
+}
+/* Put text on its own line(s) after the line the cursor is on. */
+function insertChartLines(ta, text, pos) {
+  const val = ta.value;
+  let at = clamp(pos, 0, val.length);
+  const lineEnd = val.indexOf("\n", at), lineStart = val.lastIndexOf("\n", at - 1) + 1;
+  if (val.slice(lineStart, lineEnd < 0 ? val.length : lineEnd).trim()) at = lineEnd < 0 ? val.length : lineEnd; else at = lineStart;
+  const before = val.slice(0, at), after = val.slice(at);
+  ta.value = before + (before && !before.endsWith("\n") ? "\n" : "") + text + (after.startsWith("\n") ? "" : "\n") + after;
+  editState.pos = (before + text).length + 1;
+}
+/* The picture line the cursor is on, if any: {index, o}. */
+function imageAtCursor() {
+  const ta = $("#f-chart"); if (!ta) return null;
+  const lines = ta.value.split("\n"); const li = ta.value.slice(0, ta.selectionStart).split("\n").length - 1;
+  const o = lines[li] != null && parseImageLine(lines[li]);
+  return o ? { li, o, lines } : null;
+}
+function editImageLine(change) {
+  const ta = $("#f-chart"); const hit = imageAtCursor(); if (!ta || !hit) return;
+  if (change === "del") hit.lines.splice(hit.li, 1);
+  else { hit.o.w = clamp(hit.o.w * (change > 0 ? 1.2 : 1 / 1.2), 4, 80); hit.lines[hit.li] = imageLine(hit.o); }
+  const start = hit.lines.slice(0, hit.li).join("\n").length + (hit.li ? 1 : 0);
+  ta.value = hit.lines.join("\n");
+  ta.selectionStart = ta.selectionEnd = Math.min(start, ta.value.length);
+  const s = state.songs.get(editState.id); s.chart = ta.value; queueEditSave(); renderPalette();
+}
+const urlCache = new Map();
+async function hydrateImages(root, song) {
+  for (const el of $$("[data-img]", root)) {
+    const id = el.dataset.img;
+    let url = urlCache.get(id);
+    if (!url) { const b = await getImageBlob(song, id); if (!b) { el.classList.add("missing"); el.innerHTML = `<span style="font-size:0.7em">Picture not on this device</span>`; continue; } url = URL.createObjectURL(b); urlCache.set(id, url); }
+    if (!el.isConnected) return;
+    el.innerHTML = `<img src="${url}" alt="">`;
+  }
+}
+const imageIdsIn = text => [...(text || "").matchAll(/\{\s*image\s*:\s*([A-Za-z0-9_-]+)/gi)].map(m => m[1]);
+
+/* ---------- Artist names: suggest ones already in the library ---------- */
+const artistKey = a => (a || "").trim().toLowerCase().replace(/^the\s+/, "").replace(/\s+/g, " ");
+function knownArtists() {
+  const byKey = new Map();
+  for (const s of liveSongs()) {
+    const a = (s.artist || "").trim(); if (!a) continue;
+    const k = artistKey(a); const e = byKey.get(k) || { counts: new Map(), n: 0 };
+    e.counts.set(a, (e.counts.get(a) || 0) + 1); e.n++; byKey.set(k, e);
+  }
+  /* The spelling used most often wins, so "AC/DC" beats a one-off "acdc". */
+  return [...byKey.entries()].map(([k, e]) => ({ key: k, name: [...e.counts.entries()].sort((a, b) => b[1] - a[1])[0][0], n: e.n }));
+}
+function bindArtistField(s) {
+  const inp = $("#f-artist"), box = $("#artist-sugg"); if (!inp || !box) return;
+  const artists = knownArtists().filter(a => a.key !== artistKey(s.artist) || true);
+  const show = () => {
+    const q = artistKey(inp.value);
+    if (!q) { box.innerHTML = ""; return; }
+    const hits = artists.filter(a => a.key !== q && (a.key.startsWith(q) || a.key.includes(" " + q))).sort((a, b) => b.n - a.n).slice(0, 6);
+    box.innerHTML = hits.map(a => `<button type="button" class="chip" data-artist="${esc(a.name)}">${esc(a.name)}</button>`).join("");
+  };
+  inp.addEventListener("input", show);
+  inp.addEventListener("focus", show);
+  box.addEventListener("pointerdown", e => { if (e.target.closest("[data-artist]")) e.preventDefault(); });
+  box.addEventListener("click", e => {
+    const b = e.target.closest("[data-artist]"); if (!b) return;
+    inp.value = b.dataset.artist; inp.dispatchEvent(new Event("input")); box.innerHTML = "";
+  });
+  inp.addEventListener("blur", () => {
+    setTimeout(() => { box.innerHTML = ""; }, 150);
+    /* Same artist typed differently ("ac/dc", "The Beatles" vs "Beatles"): use the library's spelling. */
+    const match = artists.find(a => a.key === artistKey(inp.value));
+    if (match && match.name !== inp.value.trim()) { inp.value = match.name; inp.dispatchEvent(new Event("input")); box.innerHTML = ""; }
+  });
+}
 
 /* ---------- Tab builder: tap a string position, tap a fret ---------- */
 const TAB_LINE_RE = /^\s*([A-Ga-g][#b]?)\s*\|(.*)$/;
@@ -1962,7 +2119,8 @@ function backupReminder() {
 }
 async function exportBackup() {
   const withPdf = $("#b-pdf")?.checked;
-  const data = { app: "Stagebook", version: 1, exportedAt: new Date().toISOString(), songs: [...state.songs.values()].filter(s => !s.purged), sets: [...state.sets.values()].filter(s => !s.purged), ink: [...state.ink.values()], pdfs: {} };
+  const data = { app: "Stagebook", version: 1, exportedAt: new Date().toISOString(), songs: [...state.songs.values()].filter(s => !s.purged), sets: [...state.sets.values()].filter(s => !s.purged), ink: [...state.ink.values()], images: {}, pdfs: {} };
+  for (const s of data.songs) for (const id of imageIdsIn(s.chart)) if (!data.images[id]) { const b = await getImageBlob(s, id); if (b) data.images[id] = { type: b.type, b64: await blobToB64(b) }; }
   if (withPdf) for (const s of data.songs) if (s.pdf) { const b = await getPdfBlob(s); if (b) data.pdfs[s.id] = await blobToB64(b); }
   /* Build the file from pieces so a library with many PDFs never becomes one giant string. */
   const pdfs = data.pdfs; data.pdfs = {};
@@ -1999,6 +2157,10 @@ async function importBackup(file) {
     const l = state[col].get(o.id);
     if (!l || (o.updatedAt || 0) > (l.updatedAt || 0)) { state[col].set(o.id, o); IDB.put("docs", col + "/" + o.id, o); queue(col + "/" + o.id); n++; }
   }
+  for (const [id, im] of Object.entries(data.images || {})) {
+    const bin = atob(im.b64); const arr = new Uint8Array(bin.length); for (let i = 0; i < bin.length; i++) arr[i] = bin.charCodeAt(i);
+    await putImage(id, new Blob([arr], { type: im.type || "image/jpeg" }));
+  }
   for (const [id, b64] of Object.entries(data.pdfs || {})) {
     const bin = atob(b64); const arr = new Uint8Array(bin.length); for (let i = 0; i < bin.length; i++) arr[i] = bin.charCodeAt(i);
     const blob = await putPdf(id, new Blob([arr], { type: "application/pdf" }));
@@ -2009,7 +2171,7 @@ async function importBackup(file) {
 
 /* ---------- actions ---------- */
 document.addEventListener("click", e => {
-  const pk = e.target.closest(".pk"); if (pk) { paletteInsert(pk.dataset.pk, pk.dataset.v); return; }
+  const pk = e.target.closest(".pk"); if (pk) { if (pk.dataset.pk) paletteInsert(pk.dataset.pk, pk.dataset.v); return; }
   const el = e.target.closest("[data-act]"); if (!el || el.disabled) return;
   const a = el.dataset.act, r = state.route;
   const song = r.view === "song" ? state.songs.get(r.id) : r.view === "perform" ? (() => { const t = state.sets.get(r.setId); const it = t && perfItems(t)[r.idx || 0]; return it && it.type === "song" ? state.songs.get(it.id) : null; })() : null;
