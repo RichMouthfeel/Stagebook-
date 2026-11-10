@@ -1467,7 +1467,7 @@ function renderEdit() {
   upd("#f-tab", v => s.tabUrl = extractUrl(v) || v.trim());
   $("#f-tab").addEventListener("blur", e => { e.target.value = s.tabUrl; });
   upd("#f-notes", v => s.notes = v);
-  upd("#f-chart", v => { s.chart = v; editState.autoAt = -1; editState.closeAt = -1; debounce("palette", 600, renderPalette); });
+  upd("#f-chart", v => { s.chart = v; editState.autoAt = -1; editState.closeAt = -1; debounce("palette", PALETTE_WAIT, renderPalette); });
   $("#f-pdf").addEventListener("change", async e => {
     const f = e.target.files[0]; if (!f) return;
     s.pdf = { name: f.name, size: f.size, local: true }; const b = await putPdf(s.id, f); save("songs", s);
@@ -1494,11 +1494,16 @@ function finishEdit() {
   }
   editState = null;
 }
+/* Wait for a pause in typing or tapping before the chord buttons refresh. */
+const PALETTE_WAIT = 2500;
 function renderPalette() {
   const el = $("#palette"); const s = editState && state.songs.get(editState.id); if (!el || !s) return;
   const k = songKey(s);
-  const freq = {}; for (const c of chordsIn(s.chart)) freq[c] = (freq[c] || 0) + 1;
-  const used = Object.entries(freq).sort((a, b) => b[1] - a[1]).map(x => x[0]).slice(0, 10);
+  /* "In song" keeps its order while you edit: chords stay where they first appeared and new ones
+     are added at the end, so a button never moves out from under your finger. */
+  const order = editState.used || (editState.used = []);
+  for (const c of chordsIn(s.chart)) if (!order.includes(c)) order.push(c);
+  const used = order.slice(0, 16);
   const pk = (v, cls = "c", kind = "chord") => `<button class="pk ${cls}" data-pk="${kind}" data-v="${esc(v)}">${esc(v)}</button>`;
   const img = imageAtCursor();
   el.innerHTML = `
@@ -1534,7 +1539,7 @@ function paletteInsert(kind, v) {
     ta.setRangeText((pre ? pre + "\n" : pre2) + v + ":\n", a, b, "end"); es.autoAt = -1;
   }
   const s = state.songs.get(es.id); const keepAuto = es.autoAt, keepClose = es.closeAt;
-  s.chart = ta.value; queueEditSave(); debounce("palette", 600, renderPalette);
+  s.chart = ta.value; queueEditSave(); debounce("palette", PALETTE_WAIT, renderPalette);
   es.autoAt = keepAuto; es.closeAt = keepClose;
 }
 document.addEventListener("pointerdown", e => { if (e.target.closest(".pk")) e.preventDefault(); });
