@@ -15,6 +15,7 @@
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Atkinson+Hyperlegible:wght@400;700&family=Big+Shoulders+Display:wght@700;800&family=JetBrains+Mono:wght@400;700&display=swap">
+<script>window.STAGEBOOK_VERSION = "2026-11-11.c627b9";</script>
 <style>:root{padding-top:env(safe-area-inset-top,0px);padding-bottom:env(safe-area-inset-bottom,0px);color-scheme:light}body{margin:0}img{max-width:100%}[hidden]{display:none!important}</style>
 </head>
 <body>
@@ -2153,6 +2154,11 @@ function renderBackup() {
       <div class="actions"><label class="btn" for="b-inspect">Make a backup report</label><input id="b-inspect" type="file" hidden></div>
       <div id="os-out"></div>
     </div>
+    ${IN_CLAUDE ? "" : `<div class="card">
+      <div class="eyebrow">App version</div>
+      <p class="muted" style="margin:0">Stagebook ${esc(window.STAGEBOOK_VERSION || "")}. Updates download on their own when you're online. If a new feature hasn't shown up, tap Check for update. Your songs aren't affected.</p>
+      <div class="actions"><button class="btn" data-act="force-update">Check for update</button></div>
+    </div>`}
     <div class="card">
       <div class="eyebrow">Recently deleted</div>
       ${trash.length ? `<ul class="list">${trash.map(({ col, o }) => `<li><div class="row"><span class="main-col"><span class="title">${esc(o.title || o.name || "Untitled")}</span><span class="sub">${col === "songs" ? "Song" : "Set"}${o.deletedAt ? " · deleted " + new Date(o.deletedAt).toLocaleDateString() : ""}</span></span><span class="actions"><button class="btn sm primary" data-act="restore" data-col="${col}" data-id="${o.id}">Restore</button><button class="btn sm danger" data-act="purge" data-col="${col}" data-id="${o.id}">Delete forever</button></span></div></li>`).join("")}</ul>` : `<p class="muted">Nothing here. Deleted songs and sets wait here until you remove them for good.</p>`}
@@ -2320,6 +2326,7 @@ document.addEventListener("click", e => {
     case "as-toggle": autoscroll.on ? stopAutoscroll() : startAutoscroll(); break;
     case "as-speed": if (song) { song.scrollSpeed = clamp((song.scrollSpeed ?? 3) + +el.dataset.d, 0, SPEEDS.length - 1); save("songs", song); const v = el.parentElement.querySelector(".val"); if (v) v.textContent = song.scrollSpeed + 1; } break;
     case "export": exportBackup(); break;
+    case "force-update": if (window.stagebookForceUpdate) window.stagebookForceUpdate(); break;
     case "awake": state.prefs.awake = !state.prefs.awake; savePrefs(); if (state.prefs.awake) keepAwake(); else stopAwake(); updateAwake(); toast(state.prefs.awake ? "The screen will stay on while Stagebook is open." : "The screen can sleep again."); break;
     case "remove-onsong":
       if (el.dataset.confirm !== "1") { el.dataset.confirm = "1"; el.textContent = "Tap again to remove the import"; setTimeout(() => { if (el.isConnected) render(); }, 5000); break; }
@@ -2350,6 +2357,17 @@ document.addEventListener("click", e => {
 if ("serviceWorker" in navigator) {
   const hadController = !!navigator.serviceWorker.controller;
   navigator.serviceWorker.register("sw.js").catch(() => {});
+  /* Fetch a fresh copy of the app, skipping every cache. Songs live in IndexedDB and are untouched. */
+  window.stagebookForceUpdate = async () => {
+    if (!navigator.onLine) { toast("Connect to the internet, then try again."); return; }
+    toast("Getting the latest Stagebook…");
+    try {
+      await Promise.all(["./", "index.html", "sw.js"].map(u => fetch(u, { cache: "reload" })));
+      for (const r of await navigator.serviceWorker.getRegistrations()) await r.unregister();
+      for (const k of await caches.keys()) if (k.startsWith("core-")) await caches.delete(k);
+    } catch (e) { toast("Couldn't reach the Stagebook website. Check the connection and try again."); return; }
+    location.reload();
+  };
   navigator.serviceWorker.addEventListener("controllerchange", () => {
     if (hadController && window.toast) toast("A new version of Stagebook is ready.", { label: "Reload", run: () => location.reload() });
   });
