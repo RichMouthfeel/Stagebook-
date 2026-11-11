@@ -1887,7 +1887,7 @@ function renderSet() {
   const main = $("#main");
   let n = 0;
   main.innerHTML = `<div class="wrap">
-    <div class="toolbar"><button class="btn ghost sm" data-act="nav" data-to="sets">‹ Sets</button><span class="sp"></span><button class="btn sm danger" data-act="delete-set">Delete set</button></div>
+    <div class="toolbar"><button class="btn ghost sm" data-act="nav" data-to="sets">‹ Sets</button><span class="sp"></span><button class="btn sm" data-act="dup-set" title="Make a new set with the same songs">Duplicate set</button><button class="btn sm danger" data-act="delete-set">Delete set</button></div>
     <div class="grid setfields">
       <label class="field">Set name<input id="s-name" type="text" value="${esc(t.name)}" placeholder="Friday at The Rail" autocomplete="off"></label>
       <label class="field">Date<input id="s-date" type="date" value="${esc(t.date)}"></label>
@@ -2251,6 +2251,14 @@ document.addEventListener("click", e => {
     case "add-break": { const t = state.sets.get(r.id); t.items = t.items.concat([{ type: "break", label: "Set break" }]); save("sets", t); const y = $("#main").scrollTop; render(); $("#main").scrollTop = y; break; }
     case "mv": { const t = state.sets.get(r.id); const i = +el.dataset.i, j = i + +el.dataset.d; const items = t.items.slice(); [items[i], items[j]] = [items[j], items[i]]; t.items = items; save("sets", t); const y = $("#main").scrollTop; render(); $("#main").scrollTop = y; break; }
     case "rm": { const t = state.sets.get(r.id); const before = t.items; t.items = t.items.filter((_, i) => i !== +el.dataset.i); save("sets", t); const y = $("#main").scrollTop; render(); $("#main").scrollTop = y; toast("Removed from set.", { label: "Undo", run: () => { t.items = before; save("sets", t); render(); } }); break; }
+    case "dup-set": {
+      const t = state.sets.get(r.id);
+      const copy = newSet({ name: (t.name || "Untitled set") + " (copy)", group: t.group, date: "", items: t.items.map(i => Object.assign({}, i)) });
+      save("sets", copy); go({ view: "set", id: copy.id });
+      setTimeout(() => { const n = $("#s-name"); if (n) { n.focus(); n.select(); } }, 50);
+      toast("Set duplicated. Give it a new name and date.", { label: "Undo", run: () => { copy.deleted = true; copy.deletedAt = Date.now(); save("sets", copy); go({ view: "set", id: t.id }); } });
+      break;
+    }
     case "delete-set": { const t = state.sets.get(r.id); t.deleted = true; t.deletedAt = Date.now(); save("sets", t); go({ view: "sets" }); toast(`Deleted “${t.name || "set"}”.`, { label: "Undo", run: () => { t.deleted = false; save("sets", t); go({ view: "set", id: t.id }); } }); break; }
     case "perf-exit": go({ view: "set", id: r.setId }); break;
     case "perf-go": perfGo(+el.dataset.d); break;
