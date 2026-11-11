@@ -201,6 +201,10 @@ textarea.chartedit { font-family: var(--font-mono); font-size: 16px; line-height
 .tabpreview { margin: 0; font-family: var(--font-mono); font-size: 14px; line-height: 1.35; background: var(--bg); border-radius: 8px; padding: 10px 12px; overflow-x: auto; white-space: pre; }
 /* Sets */
 .setitems .row { cursor: default; }
+.drag { touch-action: none; cursor: grab; border: 0; background: transparent; color: var(--muted); font-size: 22px; line-height: 1; padding: 8px 6px; margin: -8px 0 -8px -6px; border-radius: 8px; user-select: none; -webkit-user-select: none; }
+.drag:active { cursor: grabbing; color: var(--accent); }
+.setitems li.dragging { position: relative; z-index: 5; background: var(--surface); box-shadow: var(--shadow); }
+.setitems li.shifting { transition: transform 0.15s ease; }
 .openbtn { flex: 1; min-width: 0; display: flex; align-items: center; gap: 12px; background: transparent; border: 0; padding: 4px 0; margin: -4px 0; text-align: left; cursor: pointer; border-radius: 8px; }
 .openbtn:hover .title { color: var(--accent); }
 .num { font-family: var(--font-mono); font-weight: 700; color: var(--muted); width: 2.2em; text-align: right; font-variant-numeric: tabular-nums; }
@@ -1898,18 +1902,67 @@ function renderSet() {
     ${t.items.length ? `<p class="muted small" style="margin:0">Tap any song to open it. Prev and Next then move through this set, and Exit brings you back here.</p>` : ""}
     ${t.items.length ? `<ul class="list setitems">${t.items.map((it, i) => {
       const ctrls = `<span class="actions"><button class="btn sm" data-act="mv" data-i="${i}" data-d="-1" aria-label="Move up" ${i ? "" : "disabled"}>↑</button><button class="btn sm" data-act="mv" data-i="${i}" data-d="1" aria-label="Move down" ${i < t.items.length - 1 ? "" : "disabled"}>↓</button><button class="btn sm" data-act="rm" data-i="${i}" aria-label="Remove from set">×</button></span>`;
-      if (it.type === "break") return `<li class="breakrow"><div class="row"><span class="num"></span><span class="main-col"><span class="title">${esc(it.label || "Set break")}</span></span>${ctrls}</div></li>`;
+      if (it.type === "break") return `<li class="breakrow" data-i="${i}"><div class="row"><button class="drag" data-drag="${i}" aria-label="Drag to move">⠿</button><span class="num"></span><span class="main-col"><span class="title">${esc(it.label || "Set break")}</span></span>${ctrls}</div></li>`;
       const s = state.songs.get(it.id); n++;
-      if (!s || s.deleted) return `<li><div class="row"><span class="num">${n}</span><span class="main-col"><span class="title muted">Song was deleted</span><span class="sub">Restore it from Backup › Recently deleted</span></span>${ctrls}</div></li>`;
+      if (!s || s.deleted) return `<li data-i="${i}"><div class="row"><button class="drag" data-drag="${i}" aria-label="Drag to move">⠿</button><span class="num">${n}</span><span class="main-col"><span class="title muted">Song was deleted</span><span class="sub">Restore it from Backup › Recently deleted</span></span>${ctrls}</div></li>`;
       const k = displayKey(s);
-      return `<li><div class="row"><button class="openbtn" data-act="set-open" data-i="${i}" aria-label="Open ${esc(s.title)}"><span class="num">${n}</span><span class="main-col"><span class="title">${esc(s.title)}</span><span class="sub">${esc(s.artist)}</span></span>${k ? `<span class="keybadge">${esc(k)}</span>` : ""}</button>${ctrls}</div></li>`;
+      return `<li data-i="${i}"><div class="row"><button class="drag" data-drag="${i}" aria-label="Drag to move">⠿</button><button class="openbtn" data-act="set-open" data-i="${i}" aria-label="Open ${esc(s.title)}"><span class="num">${n}</span><span class="main-col"><span class="title">${esc(s.title)}</span><span class="sub">${esc(s.artist)}</span></span>${k ? `<span class="keybadge">${esc(k)}</span>` : ""}</button>${ctrls}</div></li>`;
     }).join("")}</ul>` : ""}
     <div class="card picker"><div class="pagehead"><h2>Add songs</h2><div class="actions"><button class="btn sm" data-act="add-break">Add set break</button></div></div>
       <input id="pick-q" type="search" placeholder="Search your songs" autocomplete="off"><div id="picklist"></div></div>
   </div>`;
   const field = (sel, key) => $(sel).addEventListener("input", e => { t[key] = e.target.value; debounce("set-" + t.id, 600, () => save("sets", t)); });
   field("#s-name", "name"); field("#s-date", "date"); field("#s-group", "group");
+  bindSetDrag(t);
   $("#pick-q").addEventListener("input", renderPick); renderPick();
+}
+/* Drag a song by its handle to move it anywhere in the set; the list scrolls when you reach an edge. */
+function bindSetDrag(t) {
+  const list = $(".setitems"), main = $("#main"); if (!list) return;
+  list.addEventListener("pointerdown", e => {
+    const handle = e.target.closest(".drag"); if (!handle) return;
+    e.preventDefault();
+    const li = handle.closest("li"), lis = [...list.children], from = lis.indexOf(li);
+    const docY = y => y + main.scrollTop;
+    const mids = lis.map(x => { const r = x.getBoundingClientRect(); return docY(r.top + r.height / 2); });
+    const h = li.getBoundingClientRect().height;
+    const startY = docY(e.clientY);
+    let to = from, lastY = e.clientY, raf = 0, done = false;
+    try { handle.setPointerCapture(e.pointerId); } catch {}
+    li.classList.add("dragging"); lis.forEach(x => { if (x !== li) x.classList.add("shifting"); });
+    const update = () => {
+      const dy = docY(lastY) - startY;
+      li.style.transform = `translateY(${dy}px)`;
+      const center = mids[from] + dy;
+      to = lis.filter((x, j) => j !== from && mids[j] < center).length;
+      lis.forEach((x, j) => {
+        if (x === li) return;
+        const shift = from < to && j > from && j <= to ? -h : from > to && j >= to && j < from ? h : 0;
+        x.style.transform = shift ? `translateY(${shift}px)` : "";
+      });
+    };
+    const edgeScroll = () => {
+      if (done) return;
+      const r = main.getBoundingClientRect(), zone = 70;
+      const v = lastY < r.top + zone ? -(r.top + zone - lastY) / 4 : lastY > r.bottom - zone ? (lastY - (r.bottom - zone)) / 4 : 0;
+      if (v) { main.scrollTop += v; update(); }
+      raf = requestAnimationFrame(edgeScroll);
+    };
+    raf = requestAnimationFrame(edgeScroll);
+    const move = ev => { lastY = ev.clientY; update(); };
+    const end = ev => {
+      done = true; cancelAnimationFrame(raf);
+      handle.removeEventListener("pointermove", move); handle.removeEventListener("pointerup", end); handle.removeEventListener("pointercancel", end);
+      const y = main.scrollTop;
+      if (ev.type === "pointerup" && to !== from) {
+        const items = t.items.slice(); const [moved] = items.splice(from, 1); items.splice(to, 0, moved);
+        t.items = items; save("sets", t);
+      }
+      const q = $("#pick-q") ? $("#pick-q").value : "";
+      render(); main.scrollTop = y; if ($("#pick-q")) { $("#pick-q").value = q; renderPick(); }
+    };
+    handle.addEventListener("pointermove", move); handle.addEventListener("pointerup", end); handle.addEventListener("pointercancel", end);
+  });
 }
 function renderPick() {
   const t = state.sets.get(state.route.id); const q = $("#pick-q").value;
