@@ -15,7 +15,7 @@
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Atkinson+Hyperlegible:wght@400;700&family=Big+Shoulders+Display:wght@700;800&family=JetBrains+Mono:wght@400;700&display=swap">
-<script>window.STAGEBOOK_VERSION = "2026-11-14.a50c2b";</script>
+<script>window.STAGEBOOK_VERSION = "2026-11-14.8cb50c";</script>
 <style>:root{padding-top:env(safe-area-inset-top,0px);padding-bottom:env(safe-area-inset-bottom,0px);color-scheme:light}body{margin:0}img{max-width:100%}[hidden]{display:none!important}</style>
 </head>
 <body>
@@ -1870,7 +1870,7 @@ function packSetList(groups, perPage) {
   if (cur.length) pages.push(cur);
   return pages;
 }
-async function buildSetListPdf(t, items) {
+async function buildSetListPdf(t, items, showKeys = true) {
   const JsPDF = await jspdfLib();
   const doc = new JsPDF({ unit: "pt", format: "letter" });
   const W = 612, H = 792, M = 44, INK = [20, 22, 28], MUTED = [95, 100, 112], ACCENT = [180, 60, 11];
@@ -1902,7 +1902,7 @@ async function buildSetListPdf(t, items) {
       const s = it.song; n++;
       doc.setFont("helvetica", "bold"); doc.setFontSize(fs * 0.75); doc.setTextColor(...MUTED);
       doc.text(String(n), M + fs * 1.1, y, { align: "right" });
-      const k = displayKey(s), kw = k ? fs * 0.6 * (k.length + 1) : 0;
+      const k = showKeys ? displayKey(s) : "", kw = k ? fs * 0.6 * (k.length + 1) : 0;
       doc.setFontSize(fs); doc.setTextColor(...INK);
       const lines = doc.splitTextToSize(pdfText(s.title || "Untitled song"), W - M - (M + fs * 1.6) - kw - 8);
       doc.text(lines[0] + (lines.length > 1 ? "…" : ""), M + fs * 1.6, y);
@@ -1935,8 +1935,8 @@ async function printSet(t, mode) {
   const items = t.items.map(i => i.type === "break" ? i : Object.assign({}, i, { song: state.songs.get(i.id) })).filter(i => i.type === "break" || (i.song && !i.song.deleted));
   const songs = items.filter(i => i.type === "song").map(i => i.song);
   if (!songs.length) { toast("This set has no songs to print."); return; }
-  if (mode === "list") {
-    try { await sharePdf(await buildSetListPdf(t, items), (t.name || "Set list") + " - set list"); }
+  if (mode === "list" || mode === "list-nokeys") {
+    try { await sharePdf(await buildSetListPdf(t, items, mode === "list"), (t.name || "Set list") + " - set list"); }
     catch (e) { console.warn(e); toast("Couldn't make the PDF. " + (e.message || "")); }
     return;
   }
@@ -2591,7 +2591,8 @@ document.addEventListener("click", e => {
     case "print-set": {
       const t = state.sets.get(r.id);
       openMenu(el, [
-        { label: "Set list only (one page for the stage)", run: () => printSet(t, "list") },
+        { label: "Set list only, with keys", run: () => printSet(t, "list") },
+        { label: "Set list only, no keys", run: () => printSet(t, "list-nokeys") },
         { label: "Set list and every song's chart", run: () => printSet(t, "all") },
       ]);
       break;
