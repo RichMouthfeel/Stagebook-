@@ -1,8 +1,8 @@
 /* Stagebook offline cache. Everything the app needs is stored on the device at install, so it
    opens and runs with no internet. A new version downloads in the background when online and
    takes over on the next launch. */
-const VERSION = "453d12b09ae3";
-const CORE = ["./", "index.html", "manifest.webmanifest", "icon-192.png", "icon-512.png", "apple-touch-icon.png", "vendor/jszip.min.js", "vendor/pdf.min.js", "vendor/pdf.worker.min.js", "vendor/sql-asm.js"];
+const VERSION = "6881c44a7d43";
+const CORE = ["./", "index.html", "manifest.webmanifest", "icon-192.png", "icon-512.png", "apple-touch-icon.png", "vendor/jspdf.umd.min.js", "vendor/jszip.min.js", "vendor/pdf.min.js", "vendor/pdf.worker.min.js", "vendor/sql-asm.js"];
 self.addEventListener("install", e => {
   /* cache: "reload" skips the browser's short-term copy (GitHub Pages allows 10 minutes), so an update
      never stores the previous version of a file. */

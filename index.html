@@ -15,7 +15,7 @@
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Atkinson+Hyperlegible:wght@400;700&family=Big+Shoulders+Display:wght@700;800&family=JetBrains+Mono:wght@400;700&display=swap">
-<script>window.STAGEBOOK_VERSION = "2026-11-11.c627b9";</script>
+<script>window.STAGEBOOK_VERSION = "2026-11-14.b01af9";</script>
 <style>:root{padding-top:env(safe-area-inset-top,0px);padding-bottom:env(safe-area-inset-bottom,0px);color-scheme:light}body{margin:0}img{max-width:100%}[hidden]{display:none!important}</style>
 </head>
 <body>
@@ -1188,6 +1188,7 @@ function renderSong() {
         ${s.pdf ? `<span class="seg"><button class="btn sm" data-act="view" data-v="text" aria-pressed="${s.view !== "pdf"}">Chart</button><button class="btn sm" data-act="view" data-v="pdf" aria-pressed="${s.view === "pdf"}">PDF</button></span>` : ""}
         ${s.tabUrl ? `<a class="btn sm primary" href="${esc(s.tabUrl)}" target="_blank" rel="noopener">Open tab ↗</a><button class="btn sm ghost" data-act="tab-add">Change link</button>` : `<a class="btn sm" href="${esc(ugSearchUrl(s))}" target="_blank" rel="noopener">Find tab on UG ↗</a><button class="btn sm" data-act="tab-add">Add tab link</button>`}
         <button class="btn sm" data-act="add-sticky">Add note</button>
+        <button class="btn sm" data-act="print-song" title="Make a printable PDF of this chart">Print / PDF</button>
         <button class="btn sm" data-act="markup" aria-pressed="${state.markup}">Markup</button>
       </div>
     </div>
@@ -1684,6 +1685,188 @@ function bindArtistField(s) {
   });
 }
 
+/* ---------- Printable chord sheets (PDF) ----------
+   Charts are set in Courier so chords stay lined up over the lyrics; PDF-only songs print their
+   original pages. The PDF goes to the share sheet, where Print, Save to Files and AirDrop live. */
+const JSPDF = IN_CLAUDE ? "https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js" : "vendor/jspdf.umd.min.js";
+let jspdfP = null;
+function jspdfLib() {
+  if (!jspdfP) jspdfP = (async () => { if (!(window.jspdf && window.jspdf.jsPDF)) await loadScript(JSPDF); return window.jspdf.jsPDF; })();
+  jspdfP.catch(() => { jspdfP = null; });
+  return jspdfP;
+}
+/* The built-in PDF fonts only know Western characters; swap the few music symbols that fall outside. */
+const pdfText = s => String(s ?? "").replace(/♯/g, "#").replace(/♭/g, "b").replace(/°/g, "dim").replace(/›/g, ">").replace(/[^\x09\x0a\x20-\xff‘’“”–—…•€™]/g, "?");
+function chartPrintLines(text, semi, flats) {
+  const out = [];
+  for (const raw of (text || "").replace(/\r\n?/g, "\n").split("\n")) {
+    const line = raw.replace(/\t/g, "    ");
+    const dir = line.match(/^\s*\{\s*([a-z_]+)\s*(?::\s*(.*?))?\s*\}\s*$/i);
+    if (dir) {
+      const k = dir[1].toLowerCase(), v = dir[2] || "";
+      const im = k === "image" && parseImageLine(line);
+      if (im) out.push({ t: "img", im });
+      else if (["c", "comment", "ci", "comment_italic", "cb", "comment_box"].includes(k)) out.push({ t: "cmt", s: v });
+      else if (["soc", "start_of_chorus"].includes(k)) out.push({ t: "sec", s: v || "Chorus" });
+      else if (["sov", "start_of_verse"].includes(k)) out.push({ t: "sec", s: v || "Verse" });
+      else if (["sob", "start_of_bridge"].includes(k)) out.push({ t: "sec", s: v || "Bridge" });
+      continue;
+    }
+    if (!line.trim()) { out.push({ t: "blank" }); continue; }
+    if (isTabLine(line)) { out.push({ t: "tab", s: line }); continue; }
+    if (isSectionLine(line)) { out.push({ t: "sec", s: cleanSection(line) }); continue; }
+    if (hasInlineChords(line)) {
+      const { chords, lyr } = splitInline(line, semi, flats);
+      out.push({ t: "chords", s: chords });
+      if (lyr.trim()) out.push({ t: "text", s: lyr });
+      continue;
+    }
+    if (isChordLine(line)) { out.push({ t: "chords", s: trChordLine(line, semi, flats) }); continue; }
+    out.push({ t: "text", s: line });
+  }
+  while (out.length && out[out.length - 1].t === "blank") out.pop();
+  return out;
+}
+async function blobToDataUrl(b) { return new Promise((res, rej) => { const r = new FileReader(); r.onload = () => res(r.result); r.onerror = rej; r.readAsDataURL(b); }); }
+async function imageSize(url) { return new Promise(res => { const i = new Image(); i.onload = () => res({ w: i.naturalWidth, h: i.naturalHeight }); i.onerror = () => res(null); i.src = url; }); }
+
+async function buildPrintPdf(songs, title, setSongs) {
+  const JsPDF = await jspdfLib();
+  const doc = new JsPDF({ unit: "pt", format: "letter" });
+  const W = 612, H = 792, M = 48, CW = W - 2 * M, BOTTOM = H - 44;
+  let first = true;
+  const newPage = () => { if (!first) doc.addPage(); first = false; };
+  const ACCENT = [180, 60, 11], INK = [20, 22, 28], MUTED = [95, 100, 112];
+
+  if (setSongs) {
+    newPage();
+    doc.setFont("helvetica", "bold"); doc.setFontSize(24); doc.setTextColor(...INK);
+    doc.text(pdfText(title), M, M + 20);
+    let y = M + 56; let n = 0;
+    doc.setFontSize(13);
+    for (const it of setSongs) {
+      if (y > BOTTOM) { doc.addPage(); y = M + 20; }
+      if (it.type === "break") { doc.setFont("helvetica", "bold"); doc.setTextColor(...MUTED); doc.text(pdfText((it.label || "Set break").toUpperCase()), M, y); y += 24; continue; }
+      const s = it.song; n++;
+      doc.setFont("courier", "bold"); doc.setTextColor(...MUTED); doc.text(String(n).padStart(2, " ") + ".", M, y);
+      doc.setFont("helvetica", "bold"); doc.setTextColor(...INK); doc.text(pdfText(s.title || "Untitled song"), M + 34, y);
+      const k = displayKey(s);
+      if (k) { doc.setFont("courier", "bold"); doc.setTextColor(...ACCENT); doc.text(pdfText(k), W - M, y, { align: "right" }); }
+      if (s.artist) { doc.setFont("helvetica", "normal"); doc.setFontSize(10); doc.setTextColor(...MUTED); doc.text(pdfText(s.artist), M + 34, y + 13); doc.setFontSize(13); y += 10; }
+      y += 22;
+    }
+  }
+
+  for (const s of songs) {
+    const hasChart = !!(s.chart || "").trim();
+    if (!hasChart && s.pdf) {
+      const blob = await getPdfBlob(s);
+      if (!blob) { newPage(); doc.setFont("helvetica", "bold"); doc.setFontSize(18); doc.text(pdfText(s.title), M, M + 20); doc.setFont("helvetica", "normal"); doc.setFontSize(11); doc.text("This song's PDF isn't on this device.", M, M + 44); continue; }
+      const pdf = await openPdf(blob);
+      for (let p = 1; p <= pdf.numPages; p++) {
+        const page = await pdf.getPage(p); const base = page.getViewport({ scale: 1 });
+        const vp = page.getViewport({ scale: 2 });
+        const c = document.createElement("canvas"); c.width = vp.width; c.height = vp.height;
+        const ctx = c.getContext("2d"); ctx.fillStyle = "#fff"; ctx.fillRect(0, 0, c.width, c.height);
+        await page.render({ canvasContext: ctx, viewport: vp }).promise;
+        newPage();
+        const sc = Math.min(W / base.width, H / base.height);
+        const w = base.width * sc, h = base.height * sc;
+        doc.addImage(c.toDataURL("image/jpeg", 0.9), "JPEG", (W - w) / 2, (H - h) / 2, w, h);
+      }
+      continue;
+    }
+    newPage();
+    let y = M + 18;
+    doc.setFont("helvetica", "bold"); doc.setFontSize(22); doc.setTextColor(...INK);
+    doc.text(pdfText(s.title || "Untitled song"), M, y);
+    y += 18;
+    const meta = [s.artist, displayKey(s) && "Key: " + displayKey(s), s.capo && "Capo " + s.capo, s.tempo && s.tempo + " BPM"].filter(Boolean).join("   ·   ");
+    if (meta) { doc.setFont("helvetica", "normal"); doc.setFontSize(11); doc.setTextColor(...MUTED); doc.text(pdfText(meta), M, y); y += 14; }
+    if (s.notes) {
+      doc.setFont("helvetica", "oblique"); doc.setFontSize(10); doc.setTextColor(...MUTED);
+      for (const l of doc.splitTextToSize(pdfText(s.notes), CW)) { doc.text(l, M, y); y += 13; }
+    }
+    y += 12;
+    const semi = s.transpose || 0, target = transposeKey(songKey(s), semi);
+    const lines = chartPrintLines(s.chart, semi, target ? keyUsesFlats(target) : false);
+    const longest = Math.max(20, ...lines.filter(l => l.t === "chords" || l.t === "text" || l.t === "tab").map(l => l.s.replace(/\s+$/, "").length));
+    const fs = clamp(Math.floor(CW / (longest * 0.6) * 10) / 10, 7, 12), cw = fs * 0.6, lh = fs * 1.32;
+    const ensure = need => { if (y + need > BOTTOM) { doc.addPage(); y = M + 6; } };
+    const imgs = {};
+    for (const l of lines) if (l.t === "img" && !imgs[l.im.id]) { const b = await getImageBlob(s, l.im.id); if (b) { const url = await blobToDataUrl(b); imgs[l.im.id] = { url, size: await imageSize(url), fmt: /png/.test(b.type) ? "PNG" : "JPEG" }; } }
+    for (let i = 0; i < lines.length; i++) {
+      const l = lines[i];
+      if (l.t === "blank") { y += lh * 0.7; continue; }
+      if (l.t === "sec") {
+        ensure(lh * 4);
+        y += lh * 0.5;
+        doc.setFont("helvetica", "bold"); doc.setFontSize(fs * 0.85); doc.setTextColor(...MUTED);
+        doc.text(pdfText(l.s.toUpperCase()), M, y); y += lh * 1.05; continue;
+      }
+      if (l.t === "cmt") { ensure(lh); doc.setFont("helvetica", "oblique"); doc.setFontSize(fs); doc.setTextColor(...MUTED); doc.text(pdfText(l.s), M, y); y += lh; continue; }
+      if (l.t === "img") {
+        const im = imgs[l.im.id]; if (!im || !im.size) continue;
+        let w = Math.min(CW, l.im.w * fs), h = w * im.size.h / im.size.w;
+        if (h > BOTTOM - M) { h = BOTTOM - M - 10; w = h * im.size.w / im.size.h; }
+        ensure(h + 6); doc.addImage(im.url, im.fmt, M, y - fs * 0.8, w, h); y += h + 6; continue;
+      }
+      if (l.t === "tab") {
+        let n = 0; while (lines[i + n] && lines[i + n].t === "tab") n++;
+        if (lines[i - 1]?.t !== "tab") ensure(Math.min(n, 8) * lh);
+        doc.setFont("courier", "normal"); doc.setFontSize(fs); doc.setTextColor(...INK);
+        doc.text(pdfText(l.s), M, y); y += lh; continue;
+      }
+      if (l.t === "chords") {
+        if (lines[i + 1] && lines[i + 1].t === "text") ensure(lh * 2); else ensure(lh);
+        doc.setFontSize(fs); const re = /\S+/g; let m;
+        while ((m = re.exec(l.s))) {
+          const core = m[0].replace(/^\(/, "").replace(/\)$/, "");
+          const chord = isChordTok(core);
+          doc.setFont("courier", chord ? "bold" : "normal"); doc.setTextColor(...(chord ? ACCENT : MUTED));
+          doc.text(pdfText(m[0]), M + m.index * cw, y);
+        }
+        y += lh; continue;
+      }
+      ensure(lh); doc.setFont("courier", "normal"); doc.setFontSize(fs); doc.setTextColor(...INK);
+      doc.text(pdfText(l.s), M, y); y += lh;
+    }
+  }
+  const total = doc.getNumberOfPages();
+  for (let p = 1; p <= total; p++) {
+    doc.setPage(p); doc.setFont("helvetica", "normal"); doc.setFontSize(8); doc.setTextColor(...MUTED);
+    doc.text(pdfText(title) + (total > 1 ? `  ·  page ${p} of ${total}` : ""), W / 2, H - 22, { align: "center" });
+  }
+  return doc.output("blob");
+}
+async function sharePdf(blob, name) {
+  const filename = name.replace(/[\\/:*?"<>|]+/g, "-").slice(0, 80) + ".pdf";
+  if (downloadsApi) {
+    try { await downloadsApi.save({ filename, data: blob }); toast("PDF saved."); return; }
+    catch (e) { if (e && e.code === "declined") return; console.warn(e); }
+  }
+  const file = new File([blob], filename, { type: "application/pdf" });
+  if (navigator.canShare && navigator.canShare({ files: [file] })) {
+    try { await navigator.share({ files: [file], title: name }); return; }
+    catch (e) { if (e && e.name === "AbortError") return; console.warn(e); }
+  }
+  const a = document.createElement("a"); a.href = URL.createObjectURL(blob); a.download = filename; document.body.appendChild(a); a.click(); a.remove();
+  setTimeout(() => URL.revokeObjectURL(a.href), 60000); toast("PDF downloaded.");
+}
+async function printSong(s) {
+  toast("Making the PDF…");
+  try { await sharePdf(await buildPrintPdf([s], s.title || "Song"), s.title || "Song"); }
+  catch (e) { console.warn(e); toast("Couldn't make the PDF. " + (e.message || "")); }
+}
+async function printSet(t) {
+  const items = t.items.map(i => i.type === "break" ? i : Object.assign({}, i, { song: state.songs.get(i.id) })).filter(i => i.type === "break" || (i.song && !i.song.deleted));
+  const songs = items.filter(i => i.type === "song").map(i => i.song);
+  if (!songs.length) { toast("This set has no songs to print."); return; }
+  toast(`Making a PDF of ${songs.length} song${songs.length === 1 ? "" : "s"}…`);
+  try { await sharePdf(await buildPrintPdf(songs, t.name || "Set list", items), t.name || "Set list"); }
+  catch (e) { console.warn(e); toast("Couldn't make the PDF. " + (e.message || "")); }
+}
+
 /* ---------- Tab builder: tap a string position, tap a fret ---------- */
 const TAB_LINE_RE = /^\s*([A-Ga-g][#b]?)\s*\|(.*)$/;
 const TUNINGS = { guitar: "E A D G B e", bass: "E A D G" };
@@ -1899,7 +2082,7 @@ function renderSet() {
       <label class="field">Band or group<input id="s-group" type="text" value="${esc(t.group)}" list="grouplist" placeholder="My band, SoR Tuesday" autocomplete="off"></label>
       <datalist id="grouplist">${allGroups().map(g => `<option value="${esc(g)}">`).join("")}</datalist>
     </div>
-    <div class="pagehead"><h2>${t.items.filter(i => i.type === "song").length} songs</h2><div class="actions"><button class="btn primary" data-act="perform" data-id="${t.id}" ${t.items.length ? "" : "disabled"}>Perform this set</button></div></div>
+    <div class="pagehead"><h2>${t.items.filter(i => i.type === "song").length} songs</h2><div class="actions"><button class="btn" data-act="print-set" ${t.items.length ? "" : "disabled"} title="A PDF with a set list page and every chart">Print / PDF</button><button class="btn primary" data-act="perform" data-id="${t.id}" ${t.items.length ? "" : "disabled"}>Perform this set</button></div></div>
     ${t.items.length ? `<p class="muted small" style="margin:0">Tap any song to open it. Prev and Next then move through this set, and Exit brings you back here.</p>` : ""}
     ${t.items.length ? `<ul class="list setitems">${t.items.map((it, i) => {
       const ctrls = `<span class="actions"><button class="btn sm" data-act="mv" data-i="${i}" data-d="-1" aria-label="Move up" ${i ? "" : "disabled"}>↑</button><button class="btn sm" data-act="mv" data-i="${i}" data-d="1" aria-label="Move down" ${i < t.items.length - 1 ? "" : "disabled"}>↓</button><button class="btn sm" data-act="rm" data-i="${i}" aria-label="Remove from set">×</button></span>`;
@@ -2326,6 +2509,8 @@ document.addEventListener("click", e => {
     case "as-toggle": autoscroll.on ? stopAutoscroll() : startAutoscroll(); break;
     case "as-speed": if (song) { song.scrollSpeed = clamp((song.scrollSpeed ?? 3) + +el.dataset.d, 0, SPEEDS.length - 1); save("songs", song); const v = el.parentElement.querySelector(".val"); if (v) v.textContent = song.scrollSpeed + 1; } break;
     case "export": exportBackup(); break;
+    case "print-song": printSong(state.songs.get(r.id)); break;
+    case "print-set": printSet(state.sets.get(r.id)); break;
     case "force-update": if (window.stagebookForceUpdate) window.stagebookForceUpdate(); break;
     case "awake": state.prefs.awake = !state.prefs.awake; savePrefs(); if (state.prefs.awake) keepAwake(); else stopAwake(); updateAwake(); toast(state.prefs.awake ? "The screen will stay on while Stagebook is open." : "The screen can sleep again."); break;
     case "remove-onsong":
