@@ -15,7 +15,7 @@
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Atkinson+Hyperlegible:wght@400;700&family=Big+Shoulders+Display:wght@700;800&family=JetBrains+Mono:wght@400;700&display=swap">
-<script>window.STAGEBOOK_VERSION = "2026-11-14.13f72c";</script>
+<script>window.STAGEBOOK_VERSION = "2026-11-14.fc8797";</script>
 <style>:root{padding-top:env(safe-area-inset-top,0px);padding-bottom:env(safe-area-inset-bottom,0px);color-scheme:light}body{margin:0}img{max-width:100%}[hidden]{display:none!important}</style>
 </head>
 <body>
@@ -1839,37 +1839,60 @@ async function buildPrintPdf(songs, title, setSongs) {
   }
   return doc.output("blob");
 }
-/* A one-page stage set list: big type, sized so the whole set fits on a page whenever it can. */
+/* Stage set list: big type, and pages break only at set breaks. Each part of the show (the songs
+   between breaks) stays on one page; a part too long for any page is the only thing ever split.
+   The type is as large as it can be without needing more pages. */
+function packSetList(groups, perPage) {
+  const pages = []; let cur = [];
+  for (const g of groups) {
+    if (cur.length && cur.length + g.length > perPage) { pages.push(cur); cur = []; }
+    let rest = g;
+    while (rest.length > perPage) { const room = perPage - cur.length; cur = cur.concat(rest.slice(0, room)); rest = rest.slice(room); pages.push(cur); cur = []; }
+    cur = cur.concat(rest);
+  }
+  if (cur.length) pages.push(cur);
+  return pages;
+}
 async function buildSetListPdf(t, items) {
   const JsPDF = await jspdfLib();
   const doc = new JsPDF({ unit: "pt", format: "letter" });
   const W = 612, H = 792, M = 44, INK = [20, 22, 28], MUTED = [95, 100, 112], ACCENT = [180, 60, 11];
-  doc.setFont("helvetica", "bold"); doc.setFontSize(26); doc.setTextColor(...INK);
-  doc.text(pdfText(t.name || "Set list"), M, M + 22);
   const sub = [t.date && fmtDate(t.date), t.group].filter(Boolean).join("   ·   ");
-  let top = M + 34;
-  if (sub) { doc.setFont("helvetica", "normal"); doc.setFontSize(13); doc.setTextColor(...MUTED); doc.text(pdfText(sub), M, M + 44); top = M + 56; }
-  doc.setDrawColor(...MUTED); doc.setLineWidth(1); doc.line(M, top, W - M, top);
-  const rows = items.length, avail = H - M - top - 16;
-  const fs = clamp(Math.floor(avail / (rows * 1.55)), 14, 30), lh = fs * 1.55;
-  let y = top + 14 + fs, n = 0;
-  for (const it of items) {
-    if (y > H - M) { doc.addPage(); y = M + fs; }
-    if (it.type === "break") {
-      doc.setFont("helvetica", "bold"); doc.setFontSize(fs * 0.7); doc.setTextColor(...MUTED);
-      doc.text(pdfText("— " + (it.label || "Set break").toUpperCase() + " —"), W / 2, y - fs * 0.15, { align: "center" }); y += lh; continue;
+  const top = sub ? M + 56 : M + 34, avail = H - M - top - 16;
+  /* Groups: the songs up to the first break, then each break with the songs after it. */
+  const groups = [[]];
+  for (const it of items) { if (it.type === "break") groups.push([it]); else groups[groups.length - 1].push(it); }
+  const parts = groups.filter(g => g.length);
+  const fit = fs => packSetList(parts, Math.max(1, Math.floor(avail / (fs * 1.55))));
+  const fewest = fit(14).length;
+  let fs = 14;
+  for (let f = 30; f >= 14; f -= 0.5) if (fit(f).length <= fewest) { fs = f; break; }
+  const pages = fit(fs), lh = fs * 1.55;
+  let n = 0;
+  pages.forEach((rows, pi) => {
+    if (pi) doc.addPage();
+    doc.setFont("helvetica", "bold"); doc.setFontSize(26); doc.setTextColor(...INK);
+    doc.text(pdfText(t.name || "Set list"), M, M + 22);
+    if (sub) { doc.setFont("helvetica", "normal"); doc.setFontSize(13); doc.setTextColor(...MUTED); doc.text(pdfText(sub), M, M + 44); }
+    if (pages.length > 1) { doc.setFont("helvetica", "normal"); doc.setFontSize(11); doc.setTextColor(...MUTED); doc.text(`page ${pi + 1} of ${pages.length}`, W - M, M + 22, { align: "right" }); }
+    doc.setDrawColor(...MUTED); doc.setLineWidth(1); doc.line(M, top, W - M, top);
+    let y = top + 14 + fs;
+    for (const it of rows) {
+      if (it.type === "break") {
+        doc.setFont("helvetica", "bold"); doc.setFontSize(fs * 0.7); doc.setTextColor(...MUTED);
+        doc.text(pdfText("— " + (it.label || "Set break").toUpperCase() + " —"), W / 2, y - fs * 0.15, { align: "center" }); y += lh; continue;
+      }
+      const s = it.song; n++;
+      doc.setFont("helvetica", "bold"); doc.setFontSize(fs * 0.75); doc.setTextColor(...MUTED);
+      doc.text(String(n), M + fs * 1.1, y, { align: "right" });
+      const k = displayKey(s), kw = k ? fs * 0.6 * (k.length + 1) : 0;
+      doc.setFontSize(fs); doc.setTextColor(...INK);
+      const lines = doc.splitTextToSize(pdfText(s.title || "Untitled song"), W - M - (M + fs * 1.6) - kw - 8);
+      doc.text(lines[0] + (lines.length > 1 ? "…" : ""), M + fs * 1.6, y);
+      if (k) { doc.setFont("courier", "bold"); doc.setFontSize(fs * 0.85); doc.setTextColor(...ACCENT); doc.text(pdfText(k), W - M, y, { align: "right" }); }
+      y += lh;
     }
-    const s = it.song; n++;
-    doc.setFont("helvetica", "bold"); doc.setFontSize(fs * 0.75); doc.setTextColor(...MUTED);
-    doc.text(String(n), M + fs * 1.1, y, { align: "right" });
-    const k = displayKey(s), kw = k ? fs * 0.6 * (k.length + 1) : 0;
-    doc.setFontSize(fs); doc.setTextColor(...INK);
-    const titleW = W - M - (M + fs * 1.6) - kw - 8;
-    const lines = doc.splitTextToSize(pdfText(s.title || "Untitled song"), titleW);
-    doc.text(lines[0] + (lines.length > 1 ? "…" : ""), M + fs * 1.6, y);
-    if (k) { doc.setFont("courier", "bold"); doc.setFontSize(fs * 0.85); doc.setTextColor(...ACCENT); doc.text(pdfText(k), W - M, y, { align: "right" }); }
-    y += lh;
-  }
+  });
   return doc.output("blob");
 }
 async function sharePdf(blob, name) {
