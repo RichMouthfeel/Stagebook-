@@ -15,7 +15,7 @@
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Atkinson+Hyperlegible:wght@400;700&family=Big+Shoulders+Display:wght@700;800&family=JetBrains+Mono:wght@400;700&display=swap">
-<script>window.STAGEBOOK_VERSION = "2026-11-14.b01af9";</script>
+<script>window.STAGEBOOK_VERSION = "2026-11-14.13f72c";</script>
 <style>:root{padding-top:env(safe-area-inset-top,0px);padding-bottom:env(safe-area-inset-bottom,0px);color-scheme:light}body{margin:0}img{max-width:100%}[hidden]{display:none!important}</style>
 </head>
 <body>
@@ -1839,6 +1839,39 @@ async function buildPrintPdf(songs, title, setSongs) {
   }
   return doc.output("blob");
 }
+/* A one-page stage set list: big type, sized so the whole set fits on a page whenever it can. */
+async function buildSetListPdf(t, items) {
+  const JsPDF = await jspdfLib();
+  const doc = new JsPDF({ unit: "pt", format: "letter" });
+  const W = 612, H = 792, M = 44, INK = [20, 22, 28], MUTED = [95, 100, 112], ACCENT = [180, 60, 11];
+  doc.setFont("helvetica", "bold"); doc.setFontSize(26); doc.setTextColor(...INK);
+  doc.text(pdfText(t.name || "Set list"), M, M + 22);
+  const sub = [t.date && fmtDate(t.date), t.group].filter(Boolean).join("   ·   ");
+  let top = M + 34;
+  if (sub) { doc.setFont("helvetica", "normal"); doc.setFontSize(13); doc.setTextColor(...MUTED); doc.text(pdfText(sub), M, M + 44); top = M + 56; }
+  doc.setDrawColor(...MUTED); doc.setLineWidth(1); doc.line(M, top, W - M, top);
+  const rows = items.length, avail = H - M - top - 16;
+  const fs = clamp(Math.floor(avail / (rows * 1.55)), 14, 30), lh = fs * 1.55;
+  let y = top + 14 + fs, n = 0;
+  for (const it of items) {
+    if (y > H - M) { doc.addPage(); y = M + fs; }
+    if (it.type === "break") {
+      doc.setFont("helvetica", "bold"); doc.setFontSize(fs * 0.7); doc.setTextColor(...MUTED);
+      doc.text(pdfText("— " + (it.label || "Set break").toUpperCase() + " —"), W / 2, y - fs * 0.15, { align: "center" }); y += lh; continue;
+    }
+    const s = it.song; n++;
+    doc.setFont("helvetica", "bold"); doc.setFontSize(fs * 0.75); doc.setTextColor(...MUTED);
+    doc.text(String(n), M + fs * 1.1, y, { align: "right" });
+    const k = displayKey(s), kw = k ? fs * 0.6 * (k.length + 1) : 0;
+    doc.setFontSize(fs); doc.setTextColor(...INK);
+    const titleW = W - M - (M + fs * 1.6) - kw - 8;
+    const lines = doc.splitTextToSize(pdfText(s.title || "Untitled song"), titleW);
+    doc.text(lines[0] + (lines.length > 1 ? "…" : ""), M + fs * 1.6, y);
+    if (k) { doc.setFont("courier", "bold"); doc.setFontSize(fs * 0.85); doc.setTextColor(...ACCENT); doc.text(pdfText(k), W - M, y, { align: "right" }); }
+    y += lh;
+  }
+  return doc.output("blob");
+}
 async function sharePdf(blob, name) {
   const filename = name.replace(/[\\/:*?"<>|]+/g, "-").slice(0, 80) + ".pdf";
   if (downloadsApi) {
@@ -1858,10 +1891,15 @@ async function printSong(s) {
   try { await sharePdf(await buildPrintPdf([s], s.title || "Song"), s.title || "Song"); }
   catch (e) { console.warn(e); toast("Couldn't make the PDF. " + (e.message || "")); }
 }
-async function printSet(t) {
+async function printSet(t, mode) {
   const items = t.items.map(i => i.type === "break" ? i : Object.assign({}, i, { song: state.songs.get(i.id) })).filter(i => i.type === "break" || (i.song && !i.song.deleted));
   const songs = items.filter(i => i.type === "song").map(i => i.song);
   if (!songs.length) { toast("This set has no songs to print."); return; }
+  if (mode === "list") {
+    try { await sharePdf(await buildSetListPdf(t, items), (t.name || "Set list") + " - set list"); }
+    catch (e) { console.warn(e); toast("Couldn't make the PDF. " + (e.message || "")); }
+    return;
+  }
   toast(`Making a PDF of ${songs.length} song${songs.length === 1 ? "" : "s"}…`);
   try { await sharePdf(await buildPrintPdf(songs, t.name || "Set list", items), t.name || "Set list"); }
   catch (e) { console.warn(e); toast("Couldn't make the PDF. " + (e.message || "")); }
@@ -2510,7 +2548,14 @@ document.addEventListener("click", e => {
     case "as-speed": if (song) { song.scrollSpeed = clamp((song.scrollSpeed ?? 3) + +el.dataset.d, 0, SPEEDS.length - 1); save("songs", song); const v = el.parentElement.querySelector(".val"); if (v) v.textContent = song.scrollSpeed + 1; } break;
     case "export": exportBackup(); break;
     case "print-song": printSong(state.songs.get(r.id)); break;
-    case "print-set": printSet(state.sets.get(r.id)); break;
+    case "print-set": {
+      const t = state.sets.get(r.id);
+      openMenu(el, [
+        { label: "Set list only (one page for the stage)", run: () => printSet(t, "list") },
+        { label: "Set list and every song's chart", run: () => printSet(t, "all") },
+      ]);
+      break;
+    }
     case "force-update": if (window.stagebookForceUpdate) window.stagebookForceUpdate(); break;
     case "awake": state.prefs.awake = !state.prefs.awake; savePrefs(); if (state.prefs.awake) keepAwake(); else stopAwake(); updateAwake(); toast(state.prefs.awake ? "The screen will stay on while Stagebook is open." : "The screen can sleep again."); break;
     case "remove-onsong":
