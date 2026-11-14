@@ -15,7 +15,7 @@
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Atkinson+Hyperlegible:wght@400;700&family=Big+Shoulders+Display:wght@700;800&family=JetBrains+Mono:wght@400;700&display=swap">
-<script>window.STAGEBOOK_VERSION = "2026-11-14.fc8797";</script>
+<script>window.STAGEBOOK_VERSION = "2026-11-14.a50c2b";</script>
 <style>:root{padding-top:env(safe-area-inset-top,0px);padding-bottom:env(safe-area-inset-bottom,0px);color-scheme:light}body{margin:0}img{max-width:100%}[hidden]{display:none!important}</style>
 </head>
 <body>
@@ -1795,8 +1795,25 @@ async function buildPrintPdf(songs, title, setSongs) {
     const ensure = need => { if (y + need > BOTTOM) { doc.addPage(); y = M + 6; } };
     const imgs = {};
     for (const l of lines) if (l.t === "img" && !imgs[l.im.id]) { const b = await getImageBlob(s, l.im.id); if (b) { const url = await blobToDataUrl(b); imgs[l.im.id] = { url, size: await imageSize(url), fmt: /png/.test(b.type) ? "PNG" : "JPEG" }; } }
+    /* Keep each section together: a section (from its label to the next) that won't fit in the space
+       left starts on a new page. Charts without labels use the blank lines between verses. */
+    const imgH = l => { const im = imgs[l.im.id]; if (!im || !im.size) return 0; const w = Math.min(CW, l.im.w * fs); return Math.min(w * im.size.h / im.size.w, BOTTOM - M - 10) + 6; };
+    const lineH = l => l.t === "blank" ? lh * 0.7 : l.t === "sec" ? lh * 1.55 : l.t === "img" ? imgH(l) : lh;
+    const labelled = lines.some(l => l.t === "sec");
+    const startsBlock = i => i > 0 && (labelled ? lines[i].t === "sec" : lines[i].t !== "blank" && lines[i - 1].t === "blank");
+    const blockH = {};
+    for (let i = 0, start = 0; i <= lines.length; i++) {
+      if (i === lines.length || startsBlock(i)) {
+        let end = i; while (end > start && lines[end - 1].t === "blank") end--;
+        blockH[start] = lines.slice(start, end).reduce((h, l) => h + lineH(l), 0);
+        start = i;
+      }
+    }
+    const pageTop = M + 6;
     for (let i = 0; i < lines.length; i++) {
       const l = lines[i];
+      if (blockH[i] != null && y > pageTop && y + blockH[i] > BOTTOM && blockH[i] <= BOTTOM - pageTop) { doc.addPage(); y = pageTop; }
+      if (l.t === "blank" && y === pageTop) continue;
       if (l.t === "blank") { y += lh * 0.7; continue; }
       if (l.t === "sec") {
         ensure(lh * 4);
