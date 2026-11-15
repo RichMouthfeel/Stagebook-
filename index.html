@@ -15,7 +15,7 @@
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Atkinson+Hyperlegible:wght@400;700&family=Big+Shoulders+Display:wght@700;800&family=JetBrains+Mono:wght@400;700&display=swap">
-<script>window.STAGEBOOK_VERSION = "2026-11-14.8cb50c";</script>
+<script>window.STAGEBOOK_VERSION = "2026-11-15.25b44f";</script>
 <style>:root{padding-top:env(safe-area-inset-top,0px);padding-bottom:env(safe-area-inset-bottom,0px);color-scheme:light}body{margin:0}img{max-width:100%}[hidden]{display:none!important}</style>
 </head>
 <body>
@@ -166,6 +166,10 @@ input[type="date"] { -webkit-appearance: none; appearance: none; display: block;
 .pdfpages { display: flex; flex-direction: column; gap: 12px; width: 100%; }
 .pdfpages canvas { width: 100%; height: auto; display: block; background: #fff; border-radius: 4px; box-shadow: var(--shadow); }
 .sheet.pdfmode { display: block; max-width: 1000px; margin: 0 auto; }
+.sheet-scroll.twoup { overflow-y: hidden; scroll-snap-type: x mandatory; scroll-padding-left: var(--gutter-l); }
+.sheet.pdfmode.twoup { display: inline-block; min-width: 100%; max-width: none; height: 100%; margin: 0; padding-block: 12px; }
+.sheet.twoup .pdfpages { flex-direction: row; width: max-content; align-items: flex-start; }
+.sheet.twoup .pdfpages canvas { width: auto; scroll-snap-align: start; flex: none; }
 .sticky { position: absolute; width: 15em; max-width: 70vw; background: var(--sticky-bg); color: var(--sticky-fg); border-radius: 8px; box-shadow: var(--shadow); display: flex; flex-direction: column; font-family: var(--font-body); font-size: 15px; z-index: 2; }
 .sticky .grip { display: flex; align-items: center; justify-content: space-between; padding: 2px 4px 0 10px; cursor: grab; touch-action: none; font-size: 11px; font-weight: 700; letter-spacing: 0.08em; text-transform: uppercase; opacity: 0.8; user-select: none; -webkit-user-select: none; }
 .sticky .grip button { border: 0; background: transparent; color: inherit; font-size: 18px; padding: 2px 8px; cursor: pointer; }
@@ -1187,6 +1191,7 @@ function renderSong() {
         <button class="btn sm" data-act="fit" aria-pressed="${p.fit}" title="Shrink long charts to fit the screen width">Fit width</button>
         ${s.pdf ? `<span class="seg"><button class="btn sm" data-act="view" data-v="text" aria-pressed="${s.view !== "pdf"}">Chart</button><button class="btn sm" data-act="view" data-v="pdf" aria-pressed="${s.view === "pdf"}">PDF</button></span>` : ""}
         ${s.tabUrl ? `<a class="btn sm primary" href="${esc(s.tabUrl)}" target="_blank" rel="noopener">Open tab ↗</a><button class="btn sm ghost" data-act="tab-add">Change link</button>` : `<a class="btn sm" href="${esc(ugSearchUrl(s))}" target="_blank" rel="noopener">Find tab on UG ↗</a><button class="btn sm" data-act="tab-add">Add tab link</button>`}
+        ${s.pdf && s.view === "pdf" ? `<button class="btn sm" data-act="twoup" aria-pressed="${!!p.twoUp}" title="With the iPad sideways, show two PDF pages side by side">Two pages</button>` : ""}
         <button class="btn sm" data-act="add-sticky">Add note</button>
         <button class="btn sm" data-act="print-song" title="Make a printable PDF of this chart">Print / PDF</button>
         <button class="btn sm" data-act="markup" aria-pressed="${state.markup}">Markup</button>
@@ -1201,12 +1206,20 @@ function renderSong() {
 const COLORS = ["#e11d48", "#2563eb", "#16a34a", "#111827", "#f59e0b"];
 function mountSheet(host, song, opts = {}) {
   const mode = song.view === "pdf" && song.pdf ? "pdf" : "text";
-  host.innerHTML = `<div class="sheet-scroll"><div class="sheet ${mode === "pdf" ? "pdfmode" : ""}"><div class="chart"></div><canvas class="ink"></canvas><div class="stickies"></div></div></div>`;
+  const isPdf = mode === "pdf";
+  host.innerHTML = `<div class="sheet-scroll"><div class="sheet ${isPdf ? "pdfmode" : ""}"><div class="chart"></div><canvas class="ink"></canvas><div class="stickies"></div></div></div>`;
   const scroller = $(".sheet-scroll", host), sh = $(".sheet", host), content = $(".chart", host), canvas = $("canvas.ink", host), stickyLayer = $(".stickies", host);
   const ctx = canvas.getContext("2d");
   let unit = 20, destroyed = false, cur = null, erasing = false, undo = [], raf = 0;
-  const inkDoc = () => state.ink.get(song.id) || { id: song.id, text: [], pdf: [] };
-  let strokes = (inkDoc()[mode] || []).slice();
+  let pdfDoc = null, twoUp = false, lastSize = "", layoutToken = 0;
+  const inkDoc = () => state.ink.get(song.id) || { id: song.id, text: [], pdf: [], pages: [] };
+  /* Chart markup is stored in em units of the chart text. PDF markup is stored per page, in units of
+     that page's width, so it stays put whether pages are stacked or side by side. ("pdf" holds markup
+     from before pages were tracked; it is converted once the pages are drawn.) */
+  const loadStrokes = () => ((isPdf ? inkDoc().pages : inkDoc().text) || []).slice();
+  let strokes = loadStrokes();
+  const pages = () => [...content.querySelectorAll("canvas")];
+  const wantTwoUp = () => isPdf && !!state.prefs.twoUp && scroller.clientWidth > scroller.clientHeight * 1.05;
 
   function layoutText() {
     const semi = song.transpose || 0;
@@ -1228,28 +1241,70 @@ function mountSheet(host, song, opts = {}) {
     hydrateImages(content, song);
   }
   async function layoutPdf() {
+    const token = ++layoutToken;
     content.className = "pdfpages";
-    content.innerHTML = `<div class="pdfnote">Loading PDF…</div>`;
-    const blob = await getPdfBlob(song);
-    if (destroyed) return;
-    if (!blob) { content.innerHTML = `<div class="pdfnote">This PDF isn't on this device and couldn't be downloaded. If you're offline, connect and open the song again. If it came from OnSong, import your OnSong backup again (Backup page) and Stagebook will restore the missing PDFs without duplicating songs.</div>`; return; }
+    twoUp = wantTwoUp();
+    sh.classList.toggle("twoup", twoUp); scroller.classList.toggle("twoup", twoUp);
+    lastSize = scroller.clientWidth + "x" + scroller.clientHeight;
+    if (!pdfDoc) {
+      content.innerHTML = `<div class="pdfnote">Loading PDF…</div>`;
+      const blob = await getPdfBlob(song);
+      if (destroyed || token !== layoutToken) return;
+      if (!blob) { content.innerHTML = `<div class="pdfnote">This PDF isn't on this device and couldn't be downloaded. If you're offline, connect and open the song again. If it came from OnSong, import your OnSong backup again (Backup page) and Stagebook will restore the missing PDFs without duplicating songs.</div>`; return; }
+      try { pdfDoc = await openPdf(blob); }
+      catch (e) { console.warn(e); content.innerHTML = `<div class="pdfnote">Couldn't open this PDF. ${esc(e.message || "")}</div>`; return; }
+      if (destroyed || token !== layoutToken) return;
+    }
     try {
-      const pdf = await openPdf(blob);
       content.innerHTML = "";
-      const w = Math.max(320, content.clientWidth || sh.clientWidth);
+      const cs = getComputedStyle(sh), gap = 12;
+      const availH = scroller.clientHeight - parseFloat(cs.paddingTop) - parseFloat(cs.paddingBottom);
+      const half = (scroller.clientWidth - parseFloat(cs.paddingLeft) - parseFloat(cs.paddingRight) - gap) / 2;
+      const fullW = Math.max(320, content.clientWidth || sh.clientWidth);
       const dpr = Math.min(window.devicePixelRatio || 1, 2.5);
-      for (let i = 1; i <= pdf.numPages; i++) {
-        const page = await pdf.getPage(i); if (destroyed) return;
+      for (let i = 1; i <= pdfDoc.numPages; i++) {
+        const page = await pdfDoc.getPage(i); if (destroyed || token !== layoutToken) return;
         const base = page.getViewport({ scale: 1 });
-        const vp = page.getViewport({ scale: (w / base.width) * dpr });
+        const cssW = twoUp ? base.width * Math.min(availH / base.height, half / base.width) : fullW;
+        const vp = page.getViewport({ scale: (cssW / base.width) * dpr });
         const c = document.createElement("canvas"); c.width = vp.width; c.height = vp.height;
+        if (twoUp) { c.style.width = cssW + "px"; c.style.height = cssW * base.height / base.width + "px"; }
         content.appendChild(c);
         await page.render({ canvasContext: c.getContext("2d"), viewport: vp }).promise;
+        if (destroyed || token !== layoutToken) return;
         sizeCanvas();
       }
+      migrateLegacy(); sizeCanvas();
     } catch (e) { console.warn(e); content.innerHTML = `<div class="pdfnote">Couldn't open this PDF. ${esc(e.message || "")}</div>`; }
   }
-  function updateUnit() { if (mode === "pdf") unit = sh.clientWidth || 800; }
+  /* Convert markup and notes saved before per-page positions existed. Stacked view: exact, from the
+     pages on screen. Side-by-side view: from the stacked layout this screen width would have. */
+  function migrateLegacy() {
+    const old = inkDoc().pdf || [];
+    const oldNotes = (song.stickies || []).filter(n => n.m === "pdf" && n.page == null);
+    const cvs = pages(); if ((!old.length && !oldNotes.length) || !cvs.length) return;
+    let S, o, rects;
+    if (!twoUp) { S = sh.clientWidth; o = origin(); rects = cvs.map(c => ({ l: c.offsetLeft, t: c.offsetTop, w: c.clientWidth, h: c.clientHeight })); }
+    else {
+      S = scroller.clientWidth; o = { x: 16, y: 18 };
+      const C = Math.min(1000, S) - 32; let t = 18;
+      rects = cvs.map(c => { const h = C * c.height / c.width; const r = { l: 16, t, w: C, h }; t += h + 12; return r; });
+    }
+    const pageOf = py => { const i = rects.findIndex(r => py < r.t + r.h + 6); return i < 0 ? rects.length - 1 : i; };
+    for (const s of old) {
+      if (!s.p || s.p.length < 2) continue;
+      const pg = pageOf(o.y + s.p[1] * S), r = rects[pg], pts = [];
+      for (let i = 0; i < s.p.length; i += 2) pts.push(R((o.x + s.p[i] * S - r.l) / r.w), R((o.y + s.p[i + 1] * S - r.t) / r.w));
+      strokes.push({ t: s.t, c: s.c, w: s.w * S / r.w, p: pts, pg });
+    }
+    for (const n of oldNotes) {
+      const L = o.x + (n.x || 0) * S, T = o.y + (n.y || 0) * S, pg = pageOf(T), r = rects[pg];
+      n.page = pg; n.px = R((L - r.l) / r.w); n.py = R((T - r.t) / r.h); delete n.x; delete n.y;
+    }
+    if (old.length) save("ink", Object.assign({}, inkDoc(), { id: song.id, pages: strokes.slice(), pdf: [] }));
+    if (oldNotes.length) save("songs", song);
+  }
+  function updateUnit() { if (isPdf) unit = sh.clientWidth || 800; }
   function sizeCanvas() {
     updateUnit();
     const dpr = window.devicePixelRatio || 1;
@@ -1260,13 +1315,14 @@ function mountSheet(host, song, opts = {}) {
   }
   const origin = () => { const cs = getComputedStyle(sh); return { x: parseFloat(cs.paddingLeft) || 0, y: parseFloat(cs.paddingTop) || 0 }; };
   function draw() {
-    const dpr = window.devicePixelRatio || 1; const o = origin();
+    const dpr = window.devicePixelRatio || 1, o = origin(), cvs = isPdf ? pages() : null;
     ctx.setTransform(1, 0, 0, 1, 0, 0); ctx.clearRect(0, 0, canvas.width, canvas.height);
-    ctx.setTransform(dpr * unit, 0, 0, dpr * unit, dpr * o.x, dpr * o.y);
     ctx.lineCap = "round"; ctx.lineJoin = "round";
     const all = cur && !erasing ? strokes.concat([cur]) : strokes;
     for (const s of all) {
       const p = s.p; if (p.length < 2) continue;
+      if (isPdf) { const cv = cvs[s.pg]; if (!cv || !cv.clientWidth) continue; const k = cv.clientWidth; ctx.setTransform(dpr * k, 0, 0, dpr * k, dpr * cv.offsetLeft, dpr * cv.offsetTop); }
+      else ctx.setTransform(dpr * unit, 0, 0, dpr * unit, dpr * o.x, dpr * o.y);
       ctx.globalAlpha = s.t === "h" ? 0.32 : 1; ctx.strokeStyle = s.c; ctx.lineWidth = s.w;
       ctx.beginPath(); ctx.moveTo(p[0], p[1]);
       if (p.length === 2) ctx.lineTo(p[0] + 0.001, p[1]);
@@ -1277,20 +1333,32 @@ function mountSheet(host, song, opts = {}) {
   }
   const reqDraw = () => { if (!raf) raf = requestAnimationFrame(() => { raf = 0; draw(); }); };
   function pt(e) { const r = sh.getBoundingClientRect(); const o = origin(); return [(e.clientX - r.left - o.x) / unit, (e.clientY - r.top - o.y) / unit]; }
-  const R = v => Math.round(v * (mode === "pdf" ? 10000 : 100)) / (mode === "pdf" ? 10000 : 100);
-  const widths = () => mode === "pdf" ? { p: 0.0026, h: 0.02, e: 0.014 } : { p: 0.11, h: 0.95, e: 0.6 };
+  /* A pointer position on a PDF page, in that page's width units; null when not over a page. */
+  function ptPage(e, pg) {
+    const cvs = pages(); let cv = pg != null ? cvs[pg] : null;
+    if (!cv) for (let i = 0; i < cvs.length; i++) { const r = cvs[i].getBoundingClientRect(); if (e.clientX >= r.left && e.clientX <= r.right && e.clientY >= r.top && e.clientY <= r.bottom) { cv = cvs[i]; pg = i; break; } }
+    if (!cv) return null;
+    const r = cv.getBoundingClientRect();
+    return { pg, x: (e.clientX - r.left) / r.width, y: (e.clientY - r.top) / r.width, k: r.width };
+  }
+  const R = v => Math.round(v * (isPdf ? 10000 : 100)) / (isPdf ? 10000 : 100);
+  const widths = () => isPdf ? { p: 0.0026, h: 0.02, e: 0.014 } : { p: 0.11, h: 0.95, e: 0.6 };
   function canDraw(e) {
     if (e.pointerType === "pen") return state.prefs.pencil || state.markup;
     if (!state.markup) return false;
     return e.pointerType === "mouse" || state.prefs.fingerDraw;
   }
-  function eraseAt(x, y) {
-    const r = widths().e; const before = strokes.length;
-    strokes = strokes.filter(s => { for (let i = 0; i < s.p.length; i += 2) if (Math.hypot(s.p[i] - x, s.p[i + 1] - y) < r + s.w / 2) return false; return true; });
+  const hits = (s, x, y, r) => { for (let i = 0; i < s.p.length; i += 2) if (Math.hypot(s.p[i] - x, s.p[i + 1] - y) < r + s.w / 2) return true; return false; };
+  function eraseAt(ev) {
+    const r = widths().e, before = strokes.length;
+    if (isPdf) { const at = {}; strokes = strokes.filter(s => { const q = at[s.pg] || (at[s.pg] = ptPage(ev, s.pg)); return !q || !hits(s, q.x, q.y, r); }); }
+    else { const [x, y] = pt(ev); strokes = strokes.filter(s => !hits(s, x, y, r)); }
     if (strokes.length !== before) reqDraw();
   }
   function onDown(e) {
     if (!canDraw(e) || e.target.closest(".sticky") || e.target.closest("a")) return;
+    const start = isPdf ? ptPage(e) : null;
+    if (isPdf && !start) return;
     e.preventDefault();
     try { sh.setPointerCapture(e.pointerId); } catch {}
     if (!state.markup && e.pointerType === "pen") { state.markup = true; showTray(); }
@@ -1298,15 +1366,17 @@ function mountSheet(host, song, opts = {}) {
     erasing = state.prefs.tool === "e" || e.button === 5 || (e.buttons & 32) === 32;
     const w = widths();
     cur = { t: state.prefs.tool === "h" ? "h" : "p", c: state.prefs.color, w: state.prefs.tool === "h" ? w.h : w.p, p: [] };
+    if (isPdf) cur.pg = start.pg;
     addPts(e);
   }
   function addPts(e) {
     const evs = e.getCoalescedEvents ? e.getCoalescedEvents() : [e];
     for (const ev of (evs.length ? evs : [e])) {
-      const [x, y] = pt(ev);
-      if (erasing) { eraseAt(x, y); continue; }
+      if (erasing) { eraseAt(ev); continue; }
+      let x, y, k = unit;
+      if (isPdf) { const q = ptPage(ev, cur.pg); if (!q) continue; x = q.x; y = q.y; k = q.k; } else [x, y] = pt(ev);
       const p = cur.p, n = p.length;
-      if (n && Math.hypot(p[n - 2] - x, p[n - 1] - y) * unit < 1.2) continue;
+      if (n && Math.hypot(p[n - 2] - x, p[n - 1] - y) * k < 1.2) continue;
       p.push(R(x), R(y));
     }
     if (!erasing) reqDraw();
@@ -1319,7 +1389,8 @@ function mountSheet(host, song, opts = {}) {
   }
   function saveInk() {
     debounce("ink-" + song.id, 900, () => {
-      const d = Object.assign({}, inkDoc()); d.text = (d.text || []).slice(); d.pdf = (d.pdf || []).slice(); d[mode] = strokes.slice(); d.id = song.id;
+      const d = Object.assign({}, inkDoc()); d.id = song.id;
+      if (isPdf) d.pages = strokes.slice(); else d.text = strokes.slice();
       save("ink", d);
     });
   }
@@ -1333,16 +1404,27 @@ function mountSheet(host, song, opts = {}) {
   sh.addEventListener("touchstart", onTouch, { passive: false });
   sh.addEventListener("touchmove", onTouch, { passive: false });
 
-  /* sticky notes */
+  /* sticky notes: on a PDF they belong to a page (fractions of that page); on a chart, em units */
   function stickies() { return (song.stickies || []).filter(n => (n.m || "text") === mode); }
-  /* Notes imported from OnSong sit on a PDF page by fraction of that page; others by sheet units. */
   function stickyPos(n, o) {
-    if (mode === "pdf" && n.page != null && n.px != null) {
-      const pages = content.querySelectorAll("canvas"); const cv = pages[Math.min(n.page, pages.length - 1)];
+    if (isPdf) {
+      if (n.page == null || n.px == null) return null;
+      const cvs = pages(); const cv = cvs[Math.min(n.page, cvs.length - 1)];
       if (!cv || !cv.clientHeight) return null;
       return { left: cv.offsetLeft + n.px * cv.clientWidth, top: cv.offsetTop + n.py * cv.clientHeight };
     }
     return { left: o.x + n.x * unit, top: o.y + n.y * unit };
+  }
+  /* The page a point (sheet coordinates) is on, or the nearest one. */
+  function pageAt(L, T) {
+    const cvs = pages(); let best = 0, bd = Infinity;
+    cvs.forEach((c, i) => { const dx = Math.max(c.offsetLeft - L, 0, L - (c.offsetLeft + c.clientWidth)), dy = Math.max(c.offsetTop - T, 0, T - (c.offsetTop + c.clientHeight)); const d = dx + dy; if (d < bd) { bd = d; best = i; } });
+    return best;
+  }
+  function setNotePos(n, L, T) {
+    const o = origin();
+    if (isPdf) { const i = pageAt(L, T), c = pages()[i]; if (!c) return; n.page = i; n.px = R((L - c.offsetLeft) / c.clientWidth); n.py = R((T - c.offsetTop) / c.clientHeight); delete n.x; delete n.y; }
+    else { n.x = R(Math.max(0, (L - o.x) / unit)); n.y = R(Math.max(0, (T - o.y) / unit)); }
   }
   function placeStickies() {
     stickyLayer.innerHTML = "";
@@ -1364,8 +1446,8 @@ function mountSheet(host, song, opts = {}) {
       grip.addEventListener("pointerdown", e => {
         if (e.target.tagName === "BUTTON") return;
         e.preventDefault(); grip.setPointerCapture(e.pointerId);
-        const sx = e.clientX, sy = e.clientY, ox = (parseFloat(el.style.left) - o.x) / unit, oy = (parseFloat(el.style.top) - o.y) / unit;
-        const mv = ev => { delete n.page; delete n.px; delete n.py; n.x = R(Math.max(0, ox + (ev.clientX - sx) / unit)); n.y = R(Math.max(0, oy + (ev.clientY - sy) / unit)); el.style.left = o.x + n.x * unit + "px"; el.style.top = o.y + n.y * unit + "px"; };
+        const sx = e.clientX, sy = e.clientY, L0 = parseFloat(el.style.left), T0 = parseFloat(el.style.top);
+        const mv = ev => { const L = Math.max(0, L0 + ev.clientX - sx), T = Math.max(0, T0 + ev.clientY - sy); el.style.left = L + "px"; el.style.top = T + "px"; setNotePos(n, L, T); };
         const up = () => { grip.removeEventListener("pointermove", mv); grip.removeEventListener("pointerup", up); grip.removeEventListener("pointercancel", up); save("songs", song); };
         grip.addEventListener("pointermove", mv); grip.addEventListener("pointerup", up); grip.addEventListener("pointercancel", up);
       });
@@ -1373,10 +1455,19 @@ function mountSheet(host, song, opts = {}) {
     }
   }
   function addSticky() {
-    const o = origin();
-    const x = R(Math.max(0, (scroller.scrollLeft + scroller.clientWidth - o.x - 16) / unit - (mode === "pdf" ? 0.25 : 16)));
-    const y = R(Math.max(0, (scroller.scrollTop + 8) / unit));
-    song.stickies = (song.stickies || []).concat([{ id: uid(), x, y, text: "", m: mode }]);
+    const n = { id: uid(), text: "", m: mode };
+    if (isPdf) {
+      const cvs = pages(); if (!cvs.length) { toast("Wait for the PDF to finish loading."); return; }
+      const vl = scroller.scrollLeft, vt = scroller.scrollTop;
+      const i = Math.max(0, cvs.findIndex(c => c.offsetLeft + c.clientWidth > vl + 8 && c.offsetTop + c.clientHeight > vt + 8));
+      const c = cvs[i];
+      n.page = i; n.px = 0.55; n.py = R(clamp((vt + 12 - c.offsetTop) / c.clientHeight, 0.02, 0.85));
+    } else {
+      const o = origin();
+      n.x = R(Math.max(0, (scroller.scrollLeft + scroller.clientWidth - o.x - 16) / unit - 16));
+      n.y = R(Math.max(0, (scroller.scrollTop + 8) / unit));
+    }
+    song.stickies = (song.stickies || []).concat([n]);
     save("songs", song); placeStickies();
     const last = stickyLayer.lastElementChild; if (last) $("textarea", last).focus();
   }
@@ -1416,14 +1507,22 @@ function mountSheet(host, song, opts = {}) {
   }
   function hideTray() { tray?.remove(); tray = null; sh.classList.remove("drawing"); }
 
-  const ro = new ResizeObserver(() => { if (mode === "text" && state.prefs.fit) layoutText(); sizeCanvas(); });
-  if (mode === "text") layoutText(); else layoutPdf();
+  /* Turning the iPad redraws the pages when side-by-side view comes or goes, or its size changes. */
+  const ro = new ResizeObserver(() => {
+    if (!isPdf) { if (state.prefs.fit) layoutText(); sizeCanvas(); return; }
+    const size = scroller.clientWidth + "x" + scroller.clientHeight;
+    if (pdfDoc && size !== lastSize && (twoUp || wantTwoUp() !== twoUp)) debounce("relayout-" + song.id, 200, () => { if (!destroyed) layoutPdf(); });
+    else sizeCanvas();
+  });
+  if (isPdf) layoutPdf(); else layoutText();
   sizeCanvas(); ro.observe(sh); ro.observe(scroller);
   if (state.markup) showTray();
 
   return {
     scroller, addSticky, showTray, hideTray, mode,
-    refresh() { if (mode === "text") layoutText(); strokes = (inkDoc()[mode] || []).slice(); sizeCanvas(); },
+    isTwoUp: () => twoUp,
+    pageStep: () => { const c = pages(); return c.length > 1 ? c[1].offsetLeft - c[0].offsetLeft : scroller.clientWidth / 2; },
+    refresh() { if (!isPdf) layoutText(); strokes = loadStrokes(); sizeCanvas(); },
     destroy() { destroyed = true; ro.disconnect(); cancelAnimationFrame(raf); if (cur) onUp(); hideTray(); },
   };
 }
@@ -2298,6 +2397,7 @@ function renderPerform() {
       ${song ? `<span class="seg"><button class="btn sm" data-act="font" data-d="-1" aria-label="Smaller text">A−</button><button class="btn sm" data-act="font" data-d="1" aria-label="Larger text">A+</button></span>
       <span class="seg"><button class="btn sm" data-act="as-toggle" aria-pressed="${autoscroll.on}">${autoscroll.on ? "Pause" : "Auto-scroll"}</button><button class="btn sm" data-act="as-speed" data-d="-1" aria-label="Slower">−</button><span class="val" title="Scroll speed">${sp + 1}</span><button class="btn sm" data-act="as-speed" data-d="1" aria-label="Faster">+</button></span>
       ${song.tabUrl ? `<a class="btn sm" href="${esc(song.tabUrl)}" target="_blank" rel="noopener">Tab ↗</a>` : ""}
+      ${song.pdf && song.view === "pdf" ? `<button class="btn sm" data-act="twoup" aria-pressed="${!!state.prefs.twoUp}">Two pages</button>` : ""}
       <button class="btn sm" data-act="markup" aria-pressed="${state.markup}">Markup</button>` : ""}
       <button class="btn sm" data-act="perf-list">Set list</button>
     </div>
@@ -2353,6 +2453,12 @@ function startAutoscroll() {
 function perfPage(dir) {
   if (!sheet) { perfGo(dir); return; }
   const sc = sheet.scroller;
+  if (sheet.isTwoUp && sheet.isTwoUp()) {
+    const step = sheet.pageStep();
+    if (dir > 0) { if (sc.scrollLeft + sc.clientWidth >= sc.scrollWidth - 4) perfGo(1); else sc.scrollBy({ left: step, behavior: "smooth" }); }
+    else { if (sc.scrollLeft <= 2) perfGo(-1, true); else sc.scrollBy({ left: -step, behavior: "smooth" }); }
+    return;
+  }
   if (dir > 0) { if (sc.scrollTop + sc.clientHeight >= sc.scrollHeight - 4) perfGo(1); else sc.scrollBy({ top: sc.clientHeight * 0.8, behavior: "smooth" }); }
   else { if (sc.scrollTop <= 2) perfGo(-1, true); else sc.scrollBy({ top: -sc.clientHeight * 0.8, behavior: "smooth" }); }
 }
@@ -2383,7 +2489,7 @@ function renderBackup() {
   const main = $("#main");
   const songs = liveSongs(), sets = liveSets();
   const pdfs = songs.filter(s => s.pdf).length;
-  const inked = [...state.ink.values()].filter(d => (d.text || []).length || (d.pdf || []).length).length;
+  const inked = [...state.ink.values()].filter(d => (d.text || []).length || (d.pdf || []).length || (d.pages || []).length).length;
   const trash = [...state.songs.values()].filter(s => s.deleted && !s.purged).map(s => ({ col: "songs", o: s })).concat([...state.sets.values()].filter(s => s.deleted && !s.purged).map(s => ({ col: "sets", o: s }))).sort((a, b) => (b.o.deletedAt || 0) - (a.o.deletedAt || 0));
   const [cls, label, tip] = statusInfo();
   main.innerHTML = `<div class="wrap">
@@ -2588,6 +2694,13 @@ document.addEventListener("click", e => {
     case "as-speed": if (song) { song.scrollSpeed = clamp((song.scrollSpeed ?? 3) + +el.dataset.d, 0, SPEEDS.length - 1); save("songs", song); const v = el.parentElement.querySelector(".val"); if (v) v.textContent = song.scrollSpeed + 1; } break;
     case "export": exportBackup(); break;
     case "print-song": printSong(state.songs.get(r.id)); break;
+    case "twoup": {
+      state.prefs.twoUp = !state.prefs.twoUp; savePrefs();
+      if (r.view === "perform") { stopAutoscroll(); if (sheet) { sheet.destroy(); sheet = null; } renderPerform(); } else render();
+      const sideways = innerWidth > innerHeight;
+      toast(state.prefs.twoUp ? (sideways ? "Two pages side by side. Swipe sideways to turn pages." : "Turn the iPad sideways to see two pages side by side.") : "One page at a time.");
+      break;
+    }
     case "print-set": {
       const t = state.sets.get(r.id);
       openMenu(el, [
