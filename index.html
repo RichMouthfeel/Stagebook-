@@ -15,7 +15,7 @@
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Atkinson+Hyperlegible:wght@400;700&family=Big+Shoulders+Display:wght@700;800&family=JetBrains+Mono:wght@400;700&display=swap">
-<script>window.STAGEBOOK_VERSION = "2026-11-15.3eb28e";</script>
+<script>window.STAGEBOOK_VERSION = "2026-11-15.af119c";</script>
 <style>:root{padding-top:env(safe-area-inset-top,0px);padding-bottom:env(safe-area-inset-bottom,0px);color-scheme:light}body{margin:0}img{max-width:100%}[hidden]{display:none!important}</style>
 </head>
 <body>
@@ -139,6 +139,9 @@ input[type="date"] { -webkit-appearance: none; appearance: none; display: block;
 .songhead .artist { color: var(--muted); font-size: 17px; }
 .toolbar { display: flex; gap: 8px; flex-wrap: wrap; align-items: center; }
 .toolbar .sp { flex: 1; }
+/* Full screen also uses the strip kept free for the home bar at the bottom. */
+:root.focus { padding-bottom: 0; }
+body.focus .perform { padding-bottom: 0; }
 body.focus .topbar, body.focus .songhead, body.focus .notebar, body.focus .perf-top, body.focus .perf-bottom { display: none; }
 .warnbar { display: flex; flex-direction: column; gap: 10px; padding: 12px 14px; border-radius: var(--radius); border: 1.5px solid var(--bad); background: var(--bg); }
 .notebar { background: var(--sticky-bg); color: var(--sticky-fg); padding-block: 8px; padding-left: var(--gutter-l); padding-right: var(--gutter-r); font-size: 15px; white-space: pre-wrap; border-bottom: 1px solid var(--line); }
@@ -170,7 +173,7 @@ body.focus .topbar, body.focus .songhead, body.focus .notebar, body.focus .perf-
 .sheet-scroll.twoup { overflow-y: hidden; scroll-snap-type: x mandatory; scroll-padding-left: 8px; }
 .sheet.pdfmode.twoup { display: inline-block; min-width: 100%; max-width: none; height: 100%; margin: 0; padding-block: 8px; padding-left: max(8px, env(safe-area-inset-left, 0px)); padding-right: max(8px, env(safe-area-inset-right, 0px)); }
 body.focus .sheet.pdfmode.twoup { padding-block: 4px; }
-.sheet.twoup .pdfpages { flex-direction: row; width: max-content; align-items: flex-start; gap: 8px; }
+.sheet.twoup .pdfpages { flex-direction: row; width: max-content; align-items: flex-start; gap: 8px; margin-inline: auto; }
 .sheet.twoup .pdfpages canvas { width: auto; scroll-snap-align: start; flex: none; }
 .sticky { position: absolute; width: 15em; max-width: 70vw; background: var(--sticky-bg); color: var(--sticky-fg); border-radius: 8px; box-shadow: var(--shadow); display: flex; flex-direction: column; font-family: var(--font-body); font-size: 15px; z-index: 2; }
 .sticky .grip { display: flex; align-items: center; justify-content: space-between; padding: 2px 4px 0 10px; cursor: grab; touch-action: none; font-size: 11px; font-weight: 700; letter-spacing: 0.08em; text-transform: uppercase; opacity: 0.8; user-select: none; -webkit-user-select: none; }
@@ -1095,6 +1098,7 @@ let focusTipShown = false;
 function setFocus(on) {
   state.focus = on;
   document.body.classList.toggle("focus", on);
+  document.documentElement.classList.toggle("focus", on);
   if (on && !focusTipShown) { focusTipShown = true; toast("Tap the music to bring the menus back."); }
 }
 function go(route) {
