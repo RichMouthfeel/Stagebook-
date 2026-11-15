@@ -15,7 +15,7 @@
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Atkinson+Hyperlegible:wght@400;700&family=Big+Shoulders+Display:wght@700;800&family=JetBrains+Mono:wght@400;700&display=swap">
-<script>window.STAGEBOOK_VERSION = "2026-11-15.2170eb";</script>
+<script>window.STAGEBOOK_VERSION = "2026-11-15.3eb28e";</script>
 <style>:root{padding-top:env(safe-area-inset-top,0px);padding-bottom:env(safe-area-inset-bottom,0px);color-scheme:light}body{margin:0}img{max-width:100%}[hidden]{display:none!important}</style>
 </head>
 <body>
@@ -167,9 +167,10 @@ body.focus .topbar, body.focus .songhead, body.focus .notebar, body.focus .perf-
 .pdfpages { display: flex; flex-direction: column; gap: 12px; width: 100%; }
 .pdfpages canvas { width: 100%; height: auto; display: block; background: #fff; border-radius: 4px; box-shadow: var(--shadow); }
 .sheet.pdfmode { display: block; max-width: 1000px; margin: 0 auto; }
-.sheet-scroll.twoup { overflow-y: hidden; scroll-snap-type: x mandatory; scroll-padding-left: var(--gutter-l); }
-.sheet.pdfmode.twoup { display: inline-block; min-width: 100%; max-width: none; height: 100%; margin: 0; padding-block: 12px; }
-.sheet.twoup .pdfpages { flex-direction: row; width: max-content; align-items: flex-start; }
+.sheet-scroll.twoup { overflow-y: hidden; scroll-snap-type: x mandatory; scroll-padding-left: 8px; }
+.sheet.pdfmode.twoup { display: inline-block; min-width: 100%; max-width: none; height: 100%; margin: 0; padding-block: 8px; padding-left: max(8px, env(safe-area-inset-left, 0px)); padding-right: max(8px, env(safe-area-inset-right, 0px)); }
+body.focus .sheet.pdfmode.twoup { padding-block: 4px; }
+.sheet.twoup .pdfpages { flex-direction: row; width: max-content; align-items: flex-start; gap: 8px; }
 .sheet.twoup .pdfpages canvas { width: auto; scroll-snap-align: start; flex: none; }
 .sticky { position: absolute; width: 15em; max-width: 70vw; background: var(--sticky-bg); color: var(--sticky-fg); border-radius: 8px; box-shadow: var(--shadow); display: flex; flex-direction: column; font-family: var(--font-body); font-size: 15px; z-index: 2; }
 .sticky .grip { display: flex; align-items: center; justify-content: space-between; padding: 2px 4px 0 10px; cursor: grab; touch-action: none; font-size: 11px; font-weight: 700; letter-spacing: 0.08em; text-transform: uppercase; opacity: 0.8; user-select: none; -webkit-user-select: none; }
@@ -1221,7 +1222,7 @@ function mountSheet(host, song, opts = {}) {
   const scroller = $(".sheet-scroll", host), sh = $(".sheet", host), content = $(".chart", host), canvas = $("canvas.ink", host), stickyLayer = $(".stickies", host);
   const ctx = canvas.getContext("2d");
   let unit = 20, destroyed = false, cur = null, erasing = false, undo = [], raf = 0;
-  let pdfDoc = null, twoUp = false, lastSize = "", layoutToken = 0;
+  let pdfDoc = null, pdfCrop = null, twoUp = false, lastSize = "", layoutToken = 0;
   const inkDoc = () => state.ink.get(song.id) || { id: song.id, text: [], pdf: [], pages: [] };
   /* Chart markup is stored in em units of the chart text. PDF markup is stored per page, in units of
      that page's width, so it stays put whether pages are stacked or side by side. ("pdf" holds markup
@@ -1229,6 +1230,9 @@ function mountSheet(host, song, opts = {}) {
   const loadStrokes = () => ((isPdf ? inkDoc().pages : inkDoc().text) || []).slice();
   let strokes = loadStrokes();
   const pages = () => [...content.querySelectorAll("canvas")];
+  /* How a page canvas maps to the page: k = pixels per page width; (x0, y0) = the page point shown at
+     the canvas's top-left, in page-width units (non-zero when the border is trimmed). */
+  const pmap = c => { const m = c._map || { cw: 1, x0: 0, y0: 0, aspect: c.height / c.width }; return { k: c.clientWidth / m.cw, x0: m.x0, y0: m.y0, aspect: m.aspect, cw: m.cw }; };
   const wantTwoUp = () => isPdf && !!state.prefs.twoUp && scroller.clientWidth > scroller.clientHeight * 1.05;
 
   function layoutText() {
@@ -1267,20 +1271,30 @@ function mountSheet(host, song, opts = {}) {
     }
     try {
       content.innerHTML = "";
-      const cs = getComputedStyle(sh), gap = 12;
+      const cs = getComputedStyle(sh), gap = parseFloat(getComputedStyle(content).columnGap) || 12;
       const availH = scroller.clientHeight - parseFloat(cs.paddingTop) - parseFloat(cs.paddingBottom);
       const half = (scroller.clientWidth - parseFloat(cs.paddingLeft) - parseFloat(cs.paddingRight) - gap) / 2;
       const fullW = Math.max(320, content.clientWidth || sh.clientWidth);
       const dpr = Math.min(window.devicePixelRatio || 1, 2.5);
+      /* Two-page view trims the blank border every page shares, so the music itself fills the screen. */
+      const crop = twoUp ? (pdfCrop || (pdfCrop = await sharedContentBox(pdfDoc))) : { fx0: 0, fx1: 1, fy0: 0, fy1: 1 };
+      if (destroyed || token !== layoutToken) return;
+      let k = Infinity;
+      if (twoUp) for (let i = 1; i <= pdfDoc.numPages; i++) {
+        const b = (await pdfDoc.getPage(i)).getViewport({ scale: 1 }), aspect = b.height / b.width;
+        k = Math.min(k, availH / ((crop.fy1 - crop.fy0) * aspect), half / (crop.fx1 - crop.fx0));
+      }
       for (let i = 1; i <= pdfDoc.numPages; i++) {
         const page = await pdfDoc.getPage(i); if (destroyed || token !== layoutToken) return;
-        const base = page.getViewport({ scale: 1 });
-        const cssW = twoUp ? base.width * Math.min(availH / base.height, half / base.width) : fullW;
-        const vp = page.getViewport({ scale: (cssW / base.width) * dpr });
-        const c = document.createElement("canvas"); c.width = vp.width; c.height = vp.height;
-        if (twoUp) { c.style.width = cssW + "px"; c.style.height = cssW * base.height / base.width + "px"; }
+        const base = page.getViewport({ scale: 1 }), aspect = base.height / base.width;
+        const kk = twoUp ? k : fullW;
+        const cssW = (crop.fx1 - crop.fx0) * kk, cssH = (crop.fy1 - crop.fy0) * aspect * kk;
+        const vp = page.getViewport({ scale: (kk / base.width) * dpr });
+        const c = document.createElement("canvas"); c.width = Math.round(cssW * dpr); c.height = Math.round(cssH * dpr);
+        c._map = { cw: crop.fx1 - crop.fx0, x0: crop.fx0, y0: crop.fy0 * aspect, aspect };
+        if (twoUp) { c.style.width = cssW + "px"; c.style.height = cssH + "px"; }
         content.appendChild(c);
-        await page.render({ canvasContext: c.getContext("2d"), viewport: vp }).promise;
+        await page.render({ canvasContext: c.getContext("2d"), viewport: vp, transform: [1, 0, 0, 1, -crop.fx0 * kk * dpr, -crop.fy0 * aspect * kk * dpr] }).promise;
         if (destroyed || token !== layoutToken) return;
         sizeCanvas();
       }
@@ -1298,7 +1312,7 @@ function mountSheet(host, song, opts = {}) {
     else {
       S = scroller.clientWidth; o = { x: 16, y: 18 };
       const C = Math.min(1000, S) - 32; let t = 18;
-      rects = cvs.map(c => { const h = C * c.height / c.width; const r = { l: 16, t, w: C, h }; t += h + 12; return r; });
+      rects = cvs.map(c => { const h = C * pmap(c).aspect; const r = { l: 16, t, w: C, h }; t += h + 12; return r; });
     }
     const pageOf = py => { const i = rects.findIndex(r => py < r.t + r.h + 6); return i < 0 ? rects.length - 1 : i; };
     for (const s of old) {
@@ -1331,7 +1345,7 @@ function mountSheet(host, song, opts = {}) {
     const all = cur && !erasing ? strokes.concat([cur]) : strokes;
     for (const s of all) {
       const p = s.p; if (p.length < 2) continue;
-      if (isPdf) { const cv = cvs[s.pg]; if (!cv || !cv.clientWidth) continue; const k = cv.clientWidth; ctx.setTransform(dpr * k, 0, 0, dpr * k, dpr * cv.offsetLeft, dpr * cv.offsetTop); }
+      if (isPdf) { const cv = cvs[s.pg]; if (!cv || !cv.clientWidth) continue; const m = pmap(cv); ctx.setTransform(dpr * m.k, 0, 0, dpr * m.k, dpr * (cv.offsetLeft - m.x0 * m.k), dpr * (cv.offsetTop - m.y0 * m.k)); }
       else ctx.setTransform(dpr * unit, 0, 0, dpr * unit, dpr * o.x, dpr * o.y);
       ctx.globalAlpha = s.t === "h" ? 0.32 : 1; ctx.strokeStyle = s.c; ctx.lineWidth = s.w;
       ctx.beginPath(); ctx.moveTo(p[0], p[1]);
@@ -1348,8 +1362,8 @@ function mountSheet(host, song, opts = {}) {
     const cvs = pages(); let cv = pg != null ? cvs[pg] : null;
     if (!cv) for (let i = 0; i < cvs.length; i++) { const r = cvs[i].getBoundingClientRect(); if (e.clientX >= r.left && e.clientX <= r.right && e.clientY >= r.top && e.clientY <= r.bottom) { cv = cvs[i]; pg = i; break; } }
     if (!cv) return null;
-    const r = cv.getBoundingClientRect();
-    return { pg, x: (e.clientX - r.left) / r.width, y: (e.clientY - r.top) / r.width, k: r.width };
+    const r = cv.getBoundingClientRect(), m = pmap(cv), k = m.k * (r.width / (cv.clientWidth || r.width));
+    return { pg, x: (e.clientX - r.left) / k + m.x0, y: (e.clientY - r.top) / k + m.y0, k };
   }
   const R = v => Math.round(v * (isPdf ? 10000 : 100)) / (isPdf ? 10000 : 100);
   const widths = () => isPdf ? { p: 0.0026, h: 0.02, e: 0.014 } : { p: 0.11, h: 0.95, e: 0.6 };
@@ -1432,7 +1446,10 @@ function mountSheet(host, song, opts = {}) {
       if (n.page == null || n.px == null) return null;
       const cvs = pages(); const cv = cvs[Math.min(n.page, cvs.length - 1)];
       if (!cv || !cv.clientHeight) return null;
-      return { left: cv.offsetLeft + n.px * cv.clientWidth, top: cv.offsetTop + n.py * cv.clientHeight };
+      const m = pmap(cv);
+      const left = cv.offsetLeft + (n.px - m.x0) * m.k, top = cv.offsetTop + (n.py * m.aspect - m.y0) * m.k;
+      /* A note sitting in a trimmed margin is shown at the nearest edge of the music. */
+      return { left: clamp(left, cv.offsetLeft, cv.offsetLeft + Math.max(0, cv.clientWidth - 120)), top: clamp(top, cv.offsetTop, cv.offsetTop + Math.max(0, cv.clientHeight - 60)) };
     }
     return { left: o.x + n.x * unit, top: o.y + n.y * unit };
   }
@@ -1444,7 +1461,7 @@ function mountSheet(host, song, opts = {}) {
   }
   function setNotePos(n, L, T) {
     const o = origin();
-    if (isPdf) { const i = pageAt(L, T), c = pages()[i]; if (!c) return; n.page = i; n.px = R((L - c.offsetLeft) / c.clientWidth); n.py = R((T - c.offsetTop) / c.clientHeight); delete n.x; delete n.y; }
+    if (isPdf) { const i = pageAt(L, T), c = pages()[i]; if (!c) return; const m = pmap(c); n.page = i; n.px = R((L - c.offsetLeft) / m.k + m.x0); n.py = R(((T - c.offsetTop) / m.k + m.y0) / m.aspect); delete n.x; delete n.y; }
     else { n.x = R(Math.max(0, (L - o.x) / unit)); n.y = R(Math.max(0, (T - o.y) / unit)); }
   }
   function placeStickies() {
@@ -1482,7 +1499,8 @@ function mountSheet(host, song, opts = {}) {
       const vl = scroller.scrollLeft, vt = scroller.scrollTop;
       const i = Math.max(0, cvs.findIndex(c => c.offsetLeft + c.clientWidth > vl + 8 && c.offsetTop + c.clientHeight > vt + 8));
       const c = cvs[i];
-      n.page = i; n.px = 0.55; n.py = R(clamp((vt + 12 - c.offsetTop) / c.clientHeight, 0.02, 0.85));
+      const m = pmap(c);
+      n.page = i; n.px = R(m.x0 + 0.55 * m.cw); n.py = R(clamp(((Math.max(vt, c.offsetTop) + 12 - c.offsetTop) / m.k + m.y0) / m.aspect, 0.02, 0.85));
     } else {
       const o = origin();
       n.x = R(Math.max(0, (scroller.scrollLeft + scroller.clientWidth - o.x - 16) / unit - 16));
@@ -1546,6 +1564,30 @@ function mountSheet(host, song, opts = {}) {
     refresh() { if (!isPdf) layoutText(); strokes = loadStrokes(); sizeCanvas(); },
     destroy() { destroyed = true; ro.disconnect(); cancelAnimationFrame(raf); if (cur) onUp(); hideTray(); },
   };
+}
+
+/* The area of a PDF that has anything on it, shared by all its pages (as fractions of the page),
+   found from small renders. A little breathing room is kept around it. */
+async function sharedContentBox(pdf) {
+  let fx0 = 1, fx1 = 0, fy0 = 1, fy1 = 0;
+  for (let i = 1; i <= pdf.numPages; i++) {
+    const page = await pdf.getPage(i), base = page.getViewport({ scale: 1 });
+    const vp = page.getViewport({ scale: 240 / base.width });
+    const c = document.createElement("canvas"); c.width = Math.ceil(vp.width); c.height = Math.ceil(vp.height);
+    const x = c.getContext("2d", { willReadFrequently: true }); x.fillStyle = "#fff"; x.fillRect(0, 0, c.width, c.height);
+    await page.render({ canvasContext: x, viewport: vp }).promise;
+    const d = x.getImageData(0, 0, c.width, c.height).data;
+    let a = c.width, b = c.height, e = -1, f = -1;
+    for (let yy = 0; yy < c.height; yy++) for (let xx = 0; xx < c.width; xx++) {
+      const j = (yy * c.width + xx) * 4;
+      if (d[j] + d[j + 1] + d[j + 2] < 660) { if (xx < a) a = xx; if (xx > e) e = xx; if (yy < b) b = yy; if (yy > f) f = yy; }
+    }
+    if (e < 0) continue;
+    fx0 = Math.min(fx0, a / c.width); fx1 = Math.max(fx1, (e + 1) / c.width); fy0 = Math.min(fy0, b / c.height); fy1 = Math.max(fy1, (f + 1) / c.height);
+  }
+  if (fx1 <= fx0 || fy1 <= fy0) return { fx0: 0, fx1: 1, fy0: 0, fy1: 1 };
+  const pad = 0.012;
+  return { fx0: Math.max(0, fx0 - pad), fx1: Math.min(1, fx1 + pad), fy0: Math.max(0, fy0 - pad), fy1: Math.min(1, fy1 + pad) };
 }
 
 /* ---------- Song editor ---------- */
