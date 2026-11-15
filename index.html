@@ -15,7 +15,7 @@
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Atkinson+Hyperlegible:wght@400;700&family=Big+Shoulders+Display:wght@700;800&family=JetBrains+Mono:wght@400;700&display=swap">
-<script>window.STAGEBOOK_VERSION = "2026-11-15.25b44f";</script>
+<script>window.STAGEBOOK_VERSION = "2026-11-15.2170eb";</script>
 <style>:root{padding-top:env(safe-area-inset-top,0px);padding-bottom:env(safe-area-inset-bottom,0px);color-scheme:light}body{margin:0}img{max-width:100%}[hidden]{display:none!important}</style>
 </head>
 <body>
@@ -139,6 +139,7 @@ input[type="date"] { -webkit-appearance: none; appearance: none; display: block;
 .songhead .artist { color: var(--muted); font-size: 17px; }
 .toolbar { display: flex; gap: 8px; flex-wrap: wrap; align-items: center; }
 .toolbar .sp { flex: 1; }
+body.focus .topbar, body.focus .songhead, body.focus .notebar, body.focus .perf-top, body.focus .perf-bottom { display: none; }
 .warnbar { display: flex; flex-direction: column; gap: 10px; padding: 12px 14px; border-radius: var(--radius); border: 1.5px solid var(--bad); background: var(--bg); }
 .notebar { background: var(--sticky-bg); color: var(--sticky-fg); padding-block: 8px; padding-left: var(--gutter-l); padding-right: var(--gutter-r); font-size: 15px; white-space: pre-wrap; border-bottom: 1px solid var(--line); }
 .sheetwrap { flex: 1; min-height: 0; position: relative; background: var(--bg); }
@@ -1088,7 +1089,15 @@ function openMenu(anchor, items) {
 
 /* ---------- routing ---------- */
 let sheet = null;
+/* Full screen: hide every menu so the music fills the screen; a tap on the music brings them back. */
+let focusTipShown = false;
+function setFocus(on) {
+  state.focus = on;
+  document.body.classList.toggle("focus", on);
+  if (on && !focusTipShown) { focusTipShown = true; toast("Tap the music to bring the menus back."); }
+}
 function go(route) {
+  if (state.focus) setFocus(false);
   if (state.route.view === "edit") finishEdit();
   if (sheet) { sheet.destroy(); sheet = null; }
   stopAutoscroll(); releaseWake();
@@ -1192,6 +1201,7 @@ function renderSong() {
         ${s.pdf ? `<span class="seg"><button class="btn sm" data-act="view" data-v="text" aria-pressed="${s.view !== "pdf"}">Chart</button><button class="btn sm" data-act="view" data-v="pdf" aria-pressed="${s.view === "pdf"}">PDF</button></span>` : ""}
         ${s.tabUrl ? `<a class="btn sm primary" href="${esc(s.tabUrl)}" target="_blank" rel="noopener">Open tab ↗</a><button class="btn sm ghost" data-act="tab-add">Change link</button>` : `<a class="btn sm" href="${esc(ugSearchUrl(s))}" target="_blank" rel="noopener">Find tab on UG ↗</a><button class="btn sm" data-act="tab-add">Add tab link</button>`}
         ${s.pdf && s.view === "pdf" ? `<button class="btn sm" data-act="twoup" aria-pressed="${!!p.twoUp}" title="With the iPad sideways, show two PDF pages side by side">Two pages</button>` : ""}
+        <button class="btn sm" data-act="focus" title="Hide the menus so the music fills the screen">Full screen</button>
         <button class="btn sm" data-act="add-sticky">Add note</button>
         <button class="btn sm" data-act="print-song" title="Make a printable PDF of this chart">Print / PDF</button>
         <button class="btn sm" data-act="markup" aria-pressed="${state.markup}">Markup</button>
@@ -1199,7 +1209,7 @@ function renderSong() {
     </div>
     ${s.notes ? `<div class="notebar">${esc(s.notes)}</div>` : ""}
     <div class="sheetwrap" id="sheetwrap"></div>`;
-  sheet = mountSheet($("#sheetwrap"), s);
+  sheet = mountSheet($("#sheetwrap"), s, { onTap: () => { if (state.focus) setFocus(false); } });
 }
 
 /* ---------- The sheet: chart or PDF, with ink and sticky notes ---------- */
@@ -1403,6 +1413,17 @@ function mountSheet(host, song, opts = {}) {
   sh.addEventListener("pointercancel", onUp);
   sh.addEventListener("touchstart", onTouch, { passive: false });
   sh.addEventListener("touchmove", onTouch, { passive: false });
+  /* A quick tap on the music (not a scroll, swipe, drawing or a tap on a note or link). */
+  let tap = null;
+  scroller.addEventListener("pointerdown", e => { tap = e.pointerType === "pen" ? null : { x: e.clientX, y: e.clientY, t: Date.now(), id: e.pointerId }; });
+  scroller.addEventListener("pointercancel", () => { tap = null; });
+  scroller.addEventListener("pointerup", e => {
+    const t0 = tap; tap = null;
+    if (!t0 || e.pointerId !== t0.id || Math.hypot(e.clientX - t0.x, e.clientY - t0.y) > 10 || Date.now() - t0.t > 400) return;
+    if (e.target.closest(".sticky, a, button, textarea, .tray")) return;
+    if (state.markup && (state.prefs.fingerDraw || e.pointerType === "mouse")) return;
+    if (opts.onTap) opts.onTap();
+  });
 
   /* sticky notes: on a PDF they belong to a page (fractions of that page); on a chart, em units */
   function stickies() { return (song.stickies || []).filter(n => (n.m || "text") === mode); }
@@ -2399,6 +2420,7 @@ function renderPerform() {
       ${song.tabUrl ? `<a class="btn sm" href="${esc(song.tabUrl)}" target="_blank" rel="noopener">Tab ↗</a>` : ""}
       ${song.pdf && song.view === "pdf" ? `<button class="btn sm" data-act="twoup" aria-pressed="${!!state.prefs.twoUp}">Two pages</button>` : ""}
       <button class="btn sm" data-act="markup" aria-pressed="${state.markup}">Markup</button>` : ""}
+      <button class="btn sm" data-act="focus">Full screen</button>
       <button class="btn sm" data-act="perf-list">Set list</button>
     </div>
     ${song && song.notes ? `<div class="notebar">${esc(song.notes)}</div>` : ""}
@@ -2409,7 +2431,7 @@ function renderPerform() {
       <button class="btn" data-act="perf-go" data-d="1" ${idx < items.length - 1 ? "" : "disabled"}>Next ›</button>
     </div>`;
   document.body.appendChild(el);
-  if (song) { sheet = mountSheet($("#perfsheet", el), song, { perform: true }); bindSwipe(sheet.scroller); if (state.route.atEnd) sheet.scroller.scrollTop = 1e6; }
+  if (song) { sheet = mountSheet($("#perfsheet", el), song, { perform: true, onTap: () => { if (state.focus) setFocus(false); } }); bindSwipe(sheet.scroller); if (state.route.atEnd) sheet.scroller.scrollTop = 1e6; }
   state.route.atEnd = false;
   requestWake();
 }
@@ -2694,6 +2716,7 @@ document.addEventListener("click", e => {
     case "as-speed": if (song) { song.scrollSpeed = clamp((song.scrollSpeed ?? 3) + +el.dataset.d, 0, SPEEDS.length - 1); save("songs", song); const v = el.parentElement.querySelector(".val"); if (v) v.textContent = song.scrollSpeed + 1; } break;
     case "export": exportBackup(); break;
     case "print-song": printSong(state.songs.get(r.id)); break;
+    case "focus": setFocus(true); break;
     case "twoup": {
       state.prefs.twoUp = !state.prefs.twoUp; savePrefs();
       if (r.view === "perform") { stopAutoscroll(); if (sheet) { sheet.destroy(); sheet = null; } renderPerform(); } else render();
