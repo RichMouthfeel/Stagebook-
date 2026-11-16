@@ -15,7 +15,7 @@
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Atkinson+Hyperlegible:wght@400;700&family=Big+Shoulders+Display:wght@700;800&family=JetBrains+Mono:wght@400;700&display=swap">
-<script>window.STAGEBOOK_VERSION = "2026-11-15.af119c";</script>
+<script>window.STAGEBOOK_VERSION = "2026-11-16.8ec0e6";</script>
 <style>:root{padding-top:env(safe-area-inset-top,0px);padding-bottom:env(safe-area-inset-bottom,0px);color-scheme:light}body{margin:0}img{max-width:100%}[hidden]{display:none!important}</style>
 </head>
 <body>
@@ -1201,7 +1201,7 @@ function renderSong() {
       </div>
       <div class="toolbar">
         <span class="seg" title="Transpose"><button class="btn sm" data-act="tr" data-d="-1" aria-label="Transpose down">−</button><span class="val">${s.transpose > 0 ? "+" : ""}${s.transpose || 0}</span><button class="btn sm" data-act="tr" data-d="1" aria-label="Transpose up">+</button></span>
-        <span class="seg" title="Text size"><button class="btn sm" data-act="font" data-d="-1" aria-label="Smaller text">A−</button><button class="btn sm" data-act="font" data-d="1" aria-label="Larger text">A+</button></span>
+        <span class="seg" title="Text size"><button class="btn sm" data-act="font" data-d="-1" aria-label="Smaller text">A−</button><button class="btn sm" data-act="font" data-d="1" aria-label="Larger text">A+</button><button class="btn sm" data-act="fitscreen" title="Size the text so the whole chart fits on screen">Fit to screen</button></span>
         <button class="btn sm" data-act="fit" aria-pressed="${p.fit}" title="Shrink long charts to fit the screen width">Fit width</button>
         ${s.pdf ? `<span class="seg"><button class="btn sm" data-act="view" data-v="text" aria-pressed="${s.view !== "pdf"}">Chart</button><button class="btn sm" data-act="view" data-v="pdf" aria-pressed="${s.view === "pdf"}">PDF</button></span>` : ""}
         ${s.tabUrl ? `<a class="btn sm primary" href="${esc(s.tabUrl)}" target="_blank" rel="noopener">Open tab ↗</a><button class="btn sm ghost" data-act="tab-add">Change link</button>` : `<a class="btn sm" href="${esc(ugSearchUrl(s))}" target="_blank" rel="noopener">Find tab on UG ↗</a><button class="btn sm" data-act="tab-add">Add tab link</button>`}
@@ -1244,7 +1244,7 @@ function mountSheet(host, song, opts = {}) {
     const target = transposeKey(songKey(song), semi);
     const flats = target ? keyUsesFlats(target) : false;
     content.innerHTML = song.chart.trim() ? chartHTML(song.chart, semi, flats) : `<div class="ln cmt">This song has no chord chart yet. Tap Edit to add one.</div>`;
-    let px = state.prefs.fontPx;
+    let px = song.fontPx || state.prefs.fontPx;
     content.style.fontSize = px + "px";
     if (state.prefs.fit) {
       const cs = getComputedStyle(sh);
@@ -1566,6 +1566,18 @@ function mountSheet(host, song, opts = {}) {
     isTwoUp: () => twoUp,
     pageStep: () => { const c = pages(); return c.length > 1 ? c[1].offsetLeft - c[0].offsetLeft : scroller.clientWidth / 2; },
     refresh() { if (!isPdf) layoutText(); strokes = loadStrokes(); sizeCanvas(); },
+    /* The text size at which the whole chart fits on screen, both across and down. */
+    fitSize() {
+      if (isPdf) return null;
+      const cs = getComputedStyle(sh);
+      const availW = scroller.clientWidth - parseFloat(cs.paddingLeft) - parseFloat(cs.paddingRight);
+      const availH = scroller.clientHeight - parseFloat(cs.paddingTop) - 12;
+      content.style.display = "inline-block";
+      const w = content.scrollWidth, h = content.scrollHeight;
+      content.style.display = "";
+      const px = parseFloat(content.style.fontSize) || state.prefs.fontPx;
+      return Math.floor(clamp(px * Math.min(availW / w, availH / h), 10, 44) * 10) / 10;
+    },
     destroy() { destroyed = true; ro.disconnect(); cancelAnimationFrame(raf); if (cur) onUp(); hideTray(); },
   };
 }
@@ -2461,7 +2473,7 @@ function renderPerform() {
     <div class="perf-top">
       <button class="btn sm" data-act="perf-exit">Exit</button>
       <div class="perf-title"><span class="perf-count">${song ? `${pos}/${songNums.length}` : "Break"}</span><strong>${esc(song ? song.title : it.label || "Set break")}</strong>${song && displayKey(song) ? `<span class="keybadge">${esc(displayKey(song))}</span>` : ""}${song && song.capo ? `<span class="tag">Capo ${song.capo}</span>` : ""}</div>
-      ${song ? `<span class="seg"><button class="btn sm" data-act="font" data-d="-1" aria-label="Smaller text">A−</button><button class="btn sm" data-act="font" data-d="1" aria-label="Larger text">A+</button></span>
+      ${song ? `<span class="seg"><button class="btn sm" data-act="font" data-d="-1" aria-label="Smaller text">A−</button><button class="btn sm" data-act="font" data-d="1" aria-label="Larger text">A+</button><button class="btn sm" data-act="fitscreen" title="Size the text so the whole chart fits on screen">Fit to screen</button></span>
       <span class="seg"><button class="btn sm" data-act="as-toggle" aria-pressed="${autoscroll.on}">${autoscroll.on ? "Pause" : "Auto-scroll"}</button><button class="btn sm" data-act="as-speed" data-d="-1" aria-label="Slower">−</button><span class="val" title="Scroll speed">${sp + 1}</span><button class="btn sm" data-act="as-speed" data-d="1" aria-label="Faster">+</button></span>
       ${song.tabUrl ? `<a class="btn sm" href="${esc(song.tabUrl)}" target="_blank" rel="noopener">Tab ↗</a>` : ""}
       ${song.pdf && song.view === "pdf" ? `<button class="btn sm" data-act="twoup" aria-pressed="${!!state.prefs.twoUp}">Two pages</button>` : ""}
@@ -2510,7 +2522,7 @@ function startAutoscroll() {
     if (!autoscroll.on || !sheet) return;
     const dt = Math.min(0.1, (now - autoscroll.last) / 1000); autoscroll.last = now;
     const sc = sheet.scroller;
-    autoscroll.acc += SPEEDS[clamp(song.scrollSpeed ?? 3, 0, SPEEDS.length - 1)] * (state.prefs.fontPx / 20) * dt;
+    autoscroll.acc += SPEEDS[clamp(song.scrollSpeed ?? 3, 0, SPEEDS.length - 1)] * ((song.fontPx || state.prefs.fontPx) / 20) * dt;
     const whole = Math.floor(autoscroll.acc);
     if (whole) { sc.scrollTop += whole; autoscroll.acc -= whole; }
     if (sc.scrollTop + sc.clientHeight >= sc.scrollHeight - 2) { stopAutoscroll(); return; }
@@ -2698,7 +2710,21 @@ document.addEventListener("click", e => {
       break;
     }
     case "tr": if (song) { song.transpose = clamp((song.transpose || 0) + +el.dataset.d, -11, 11); if (Math.abs(song.transpose) === 12) song.transpose = 0; save("songs", song); render(); } break;
-    case "font": state.prefs.fontPx = clamp(state.prefs.fontPx + (+el.dataset.d) * 2, 12, 44); savePrefs(); if (sheet) sheet.refresh(); break;
+    case "font": {
+      /* Text size belongs to the song; songs never sized use the last size picked as the default. */
+      const base = (song && song.fontPx) || state.prefs.fontPx;
+      const next = clamp(Math.round(base + (+el.dataset.d) * 2), 10, 44);
+      if (song) { song.fontPx = next; save("songs", song); } else { state.prefs.fontPx = next; savePrefs(); }
+      if (sheet) sheet.refresh();
+      break;
+    }
+    case "fitscreen": {
+      if (!song || !sheet || !sheet.fitSize) break;
+      const px = sheet.fitSize(); if (!px) break;
+      song.fontPx = px; save("songs", song); sheet.refresh();
+      toast(px <= 10 ? "This chart is long, so it's at the smallest size and still scrolls." : "Text sized to fit the screen. This song will open at this size.");
+      break;
+    }
     case "fit": state.prefs.fit = !state.prefs.fit; savePrefs(); el.setAttribute("aria-pressed", String(state.prefs.fit)); if (sheet) sheet.refresh(); break;
     case "view": if (song) { song.view = el.dataset.v; save("songs", song); render(); } break;
     case "add-sticky": sheet && sheet.addSticky(); break;
