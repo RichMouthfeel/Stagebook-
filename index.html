@@ -15,7 +15,7 @@
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Atkinson+Hyperlegible:wght@400;700&family=Big+Shoulders+Display:wght@700;800&family=JetBrains+Mono:wght@400;700&display=swap">
-<script>window.STAGEBOOK_VERSION = "2026-11-16.8ec0e6";</script>
+<script>window.STAGEBOOK_VERSION = "2026-11-16.6162e6";</script>
 <style>:root{padding-top:env(safe-area-inset-top,0px);padding-bottom:env(safe-area-inset-bottom,0px);color-scheme:light}body{margin:0}img{max-width:100%}[hidden]{display:none!important}</style>
 </head>
 <body>
@@ -229,7 +229,7 @@ textarea.chartedit { font-family: var(--font-mono); font-size: 16px; line-height
 .perf-top, .perf-bottom { display: flex; align-items: center; gap: 8px; padding-block: 6px; padding-left: var(--gutter-l); padding-right: var(--gutter-r); background: var(--surface); flex-wrap: wrap; }
 .perf-top { border-bottom: 1px solid var(--line); }
 .perf-bottom { border-top: 1px solid var(--line); }
-.perf-title { flex: 1; min-width: 0; display: flex; align-items: baseline; gap: 10px; }
+.perf-title { flex: 1 1 300px; min-width: 0; display: flex; align-items: center; gap: 10px; margin-right: 6px; }
 .perf-title strong { font-family: var(--font-display); font-size: 26px; font-weight: 800; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; line-height: 1.1; }
 .perf-count { font-family: var(--font-mono); font-weight: 700; color: var(--muted); font-size: 14px; white-space: nowrap; }
 .perf-next { flex: 1; min-width: 0; text-align: center; color: var(--muted); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
@@ -1455,8 +1455,13 @@ function mountSheet(host, song, opts = {}) {
       /* A note sitting in a trimmed margin is shown at the nearest edge of the music. */
       return { left: clamp(left, cv.offsetLeft, cv.offsetLeft + Math.max(0, cv.clientWidth - 120)), top: clamp(top, cv.offsetTop, cv.offsetTop + Math.max(0, cv.clientHeight - 60)) };
     }
-    return { left: o.x + n.x * unit, top: o.y + n.y * unit };
+    /* Across the screen a chart note keeps the same place (a fraction of the chart's width); down the
+       page it follows its line of text, so resizing the text never pushes it sideways or off screen. */
+    const aw = chartWidth(o);
+    if (n.fx == null) n.fx = clamp(((n.x || 0) * state.prefs.fontPx) / aw, 0, 0.95);
+    return { left: o.x + clamp(n.fx * aw, 0, Math.max(0, aw - 230)), top: o.y + n.y * unit };
   }
+  function chartWidth(o) { const cs = getComputedStyle(sh); return Math.max(200, scroller.clientWidth - o.x - parseFloat(cs.paddingRight)); }
   /* The page a point (sheet coordinates) is on, or the nearest one. */
   function pageAt(L, T) {
     const cvs = pages(); let best = 0, bd = Infinity;
@@ -1466,7 +1471,7 @@ function mountSheet(host, song, opts = {}) {
   function setNotePos(n, L, T) {
     const o = origin();
     if (isPdf) { const i = pageAt(L, T), c = pages()[i]; if (!c) return; const m = pmap(c); n.page = i; n.px = R((L - c.offsetLeft) / m.k + m.x0); n.py = R(((T - c.offsetTop) / m.k + m.y0) / m.aspect); delete n.x; delete n.y; }
-    else { n.x = R(Math.max(0, (L - o.x) / unit)); n.y = R(Math.max(0, (T - o.y) / unit)); }
+    else { n.fx = Math.round(clamp((L - o.x) / chartWidth(o), 0, 1) * 1000) / 1000; n.y = R(Math.max(0, (T - o.y) / unit)); delete n.x; }
   }
   function placeStickies() {
     stickyLayer.innerHTML = "";
@@ -1507,7 +1512,8 @@ function mountSheet(host, song, opts = {}) {
       n.page = i; n.px = R(m.x0 + 0.55 * m.cw); n.py = R(clamp(((Math.max(vt, c.offsetTop) + 12 - c.offsetTop) / m.k + m.y0) / m.aspect, 0.02, 0.85));
     } else {
       const o = origin();
-      n.x = R(Math.max(0, (scroller.scrollLeft + scroller.clientWidth - o.x - 16) / unit - 16));
+      const aw = chartWidth(o);
+      n.fx = Math.round(clamp((aw - 250) / aw, 0, 0.95) * 1000) / 1000;
       n.y = R(Math.max(0, (scroller.scrollTop + 8) / unit));
     }
     song.stickies = (song.stickies || []).concat([n]);
