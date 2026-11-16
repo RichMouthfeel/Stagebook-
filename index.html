@@ -15,7 +15,7 @@
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Atkinson+Hyperlegible:wght@400;700&family=Big+Shoulders+Display:wght@700;800&family=JetBrains+Mono:wght@400;700&display=swap">
-<script>window.STAGEBOOK_VERSION = "2026-11-16.6162e6";</script>
+<script>window.STAGEBOOK_VERSION = "2026-11-16.00c48f";</script>
 <style>:root{padding-top:env(safe-area-inset-top,0px);padding-bottom:env(safe-area-inset-bottom,0px);color-scheme:light}body{margin:0}img{max-width:100%}[hidden]{display:none!important}</style>
 </head>
 <body>
@@ -1535,6 +1535,7 @@ function mountSheet(host, song, opts = {}) {
       else if (a === "undo") { if (undo.length) { strokes = undo.pop(); draw(); saveInk(); } }
       else if (a === "clear") { if (strokes.length) { undo.push(strokes.slice()); strokes = []; draw(); saveInk(); toast("Markup cleared.", { label: "Undo", run: () => { strokes = undo.pop() || []; draw(); saveInk(); } }); } }
       else if (a === "finger") state.prefs.fingerDraw = !state.prefs.fingerDraw;
+      else if (a === "note") { addSticky(); return; }
       else if (a === "done") { state.markup = false; hideTray(); $$('[data-act="markup"]').forEach(x => x.setAttribute("aria-pressed", "false")); savePrefs(); return; }
       savePrefs(); updateTray();
     });
@@ -1549,6 +1550,7 @@ function mountSheet(host, song, opts = {}) {
       <button class="btn sm" data-t="tool" data-v="h" aria-pressed="${p.tool === "h"}">Highlight</button>
       <button class="btn sm" data-t="tool" data-v="e" aria-pressed="${p.tool === "e"}">Erase</button>
       ${COLORS.map(c => `<button class="swatch" data-t="color" data-v="${c}" style="background:${c}" aria-label="Color ${c}" aria-pressed="${p.color === c && p.tool !== "e"}"></button>`).join("")}
+      <button class="btn sm" data-t="note" title="Add a sticky note you can type in and drag">+ Note</button>
       <button class="btn sm" data-t="undo" ${undo.length ? "" : "disabled"}>Undo</button>
       <button class="btn sm" data-t="clear">Clear</button>
       <button class="btn sm" data-t="finger" aria-pressed="${p.fingerDraw}" title="When off, only Apple Pencil draws and your finger scrolls">Finger draws</button>
